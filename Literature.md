@@ -14,6 +14,8 @@ Organization: The Chinese University of Hong Kong, Shenzhen.
 
 &emsp;[3.1. ADMM](#ADMM)
 
+[4. Related Software](#related-software)
+
 ## <span id="tutorial-and-books">Tutorial and Books</span>
 
 * [Authors, YYYY. *Title*. Publisher.](https://www.google.com)
@@ -27,3 +29,8 @@ Organization: The Chinese University of Hong Kong, Shenzhen.
 ### <span id="ADMM">ADMM</span>
 
 * [Authors, YYYY. *Title*. Publisher.](https://www.google.com)
+
+## <span id="related-software">Related Software</span>
+
+* [Daniel Duque, *SDDPpy*.](https://github.com/dukduque/SDDPpy)
+* [Lingquan Ding, *msppy*](https://github.com/lingquant/msppy)
