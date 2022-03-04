@@ -58,9 +58,11 @@ ADMM in Supply Chain
 
 Stochastic Integer Programming
 
-[Caroe, C. C., Schultz, R., 1999. *Dual decomposition in stochastic integer programming*. ](https://opus4.kobv.de/opus4-zib/files/256/SC-96-46.pdf)
+* [Zou et al., 2019. *Stochastic Dual Dynamic Integer Programming*] (https://link.springer.com/article/10.1007/s10107-018-1249-5)
 
-[Ahmed, R., 2013. *A scenario decomposition algorithm for 0-1 stochastic programs*. ](http://www.optimization-online.org/DB_FILE/2013/07/3966.pdf)
+* [Caroe, C. C., Schultz, R., 1999. *Dual decomposition in stochastic integer programming*. ](https://opus4.kobv.de/opus4-zib/files/256/SC-96-46.pdf)
+
+* [Ahmed, R., 2013. *A scenario decomposition algorithm for 0-1 stochastic programs*. ](http://www.optimization-online.org/DB_FILE/2013/07/3966.pdf)
 
 Progressive Hedging
 
