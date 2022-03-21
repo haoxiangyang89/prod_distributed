@@ -56,6 +56,10 @@ ADMM in Supply Chain
 
 ### <span id="stochastic-programming">Stochastic Programming</span>
 
+Multi-stage Stochastic Programming
+
+* [Pereira, M. V. F., Pinto, L. M. V. G., 1991. *Multi-stage stochastic optimization applied to energy planning](https://link.springer.com/content/pdf/10.1007/BF01582895.pdf) (This is the most iconic paper about multi-stage stochastic program algorithms, which established the method of stochastic dual dynamic programming (SDDP))
+
 Stochastic Integer Programming
 
 * [Zou et al., 2019. *Stochastic Dual Dynamic Integer Programming*. ](https://link.springer.com/article/10.1007/s10107-018-1249-5)
@@ -64,9 +68,17 @@ Stochastic Integer Programming
 
 * [Ahmed, R., 2013. *A scenario decomposition algorithm for 0-1 stochastic programs*. ](http://www.optimization-online.org/DB_FILE/2013/07/3966.pdf)
 
+* [Zou, J., Ahmed, S., Sun, X. A., 2019. *Stochastic dual dynamic integer programming](https://link.springer.com/article/10.1007/s10107-018-1249-5) (This is a very important paper that derives an exact cutting plane method for multi-stage stochastic integer program algorithms)
+
+* [Jiang, R., Wang, J., Guan, Y., 2012. *Robust unit commitment with wind power and pumped storage hydro](https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=6069602)
+
 Progressive Hedging
 
 * [Rockafellar, R. T., Wets, R. J.-B., 1991. *Scenarios and policy aggregation in optimization under uncertainty*.](https://pubsonline.informs.org/doi/pdf/10.1287/moor.16.1.119?casa_token=TdHw1I4LYJwAAAAA:QlLNfpQk9iXHS5H9Dj29i39grdpiGi7v3MLBsxHBmZUbO02SHIU0VEBxQffbXfDpYHHv2w9mIQ)
+
+* [Watson, J. P., Woodrufff, D. L., 2011. *Progressive hedging innovations for a class of stochastic mixed-integer resource allocation problems*.](https://link.springer.com/content/pdf/10.1007/s10287-010-0125-4.pdf)
+
+* [Ryan, S. M., Wets, R. J.-B., Woodrufff, D. L., Silva-Monroy, C., Watson, J. P., 2013. *Toward Scalable, Parallel Progressive Hedging for Stochastic Unit Commitment*.](http://b-dig.iie.org.mx/BibDig2/P13-0399/files/PESGM2013-002280.PDF)
 
 ### <span id="machine-learning">machine-learning</span>
 

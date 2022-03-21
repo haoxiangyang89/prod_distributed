@@ -15,3 +15,15 @@ import pandas as pd
 
 def readin_csv(file_add):
     return pd.read_csv(file_add)
+
+class prod_item():
+    '''
+        Data structure for items.
+
+    '''
+    def __init__(self):
+        pass
+    
+    def input_item(file_add):
+        # read in the raw data related to items
+        raw_data = readin_csv(file_add)
