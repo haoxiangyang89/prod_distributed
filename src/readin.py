@@ -10,6 +10,7 @@ input the data of production planning problem
 '''
 
 import pandas as pd
+import numpy as np
 
 # We need data structure for items, plants, calendar
 
@@ -69,7 +70,11 @@ def input_item_plant(item_plant_file):
 
 def input_bom(bom_file):
     # input dm_df_bom: item bom relationship information
+    # output item bom relationship
     bom_data = readin_csv(bom_file)
+    assembly_list = bom_data.assembly.unique()      # list of items with bom info
+    
+    
     
 def input_production(production_file):
     # input dm_df_production: item production relationship information
