@@ -1,4 +1,4 @@
-﻿item_code,period,bucket,order_demand,forcast_demand_with_fr
+﻿item_code,period,bucket,order_demand,forecast_demand_with_fr
 1,1,1,15,15
 3,1,1,7,7
 4,1,1,21,21
