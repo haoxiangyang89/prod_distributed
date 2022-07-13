@@ -1,7 +1,0 @@
-﻿item_code,src_plant,dest_plant,lead_time,transit_cost,orig_transit_cost,holding_cost,delta_flg
-1,1,2,1,2,0,0.5,0
-2,1,2,1,2,0,0.5,0
-3,1,2,1,2,0,0.5,0
-1,2,3,1,2,0,0.5,0
-2,2,3,1,2,0,0.5,0
-3,2,3,1,2,0,0.5,0
