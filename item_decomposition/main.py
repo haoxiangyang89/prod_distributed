@@ -128,7 +128,7 @@ gbv.epsilonUI = 0.8
 
 gbv.v0 = np.array([[1, 1, 1], [2, 2, 2], [1, 1, 1]])
 
-gbv.nu = np.array([[2, 2, 2], [1, 1, 1], [2, 2, 2]])
+gbv.nu = np.array([[2, 2, 2], [1, 1, 1], [2, 2, 2]]) # batch
 
 gbv.C = np.array([[50], [50], [50]])
 gbv.C = np.tile(gbv.C, (1, gbv.N))

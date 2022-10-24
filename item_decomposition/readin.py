@@ -32,9 +32,8 @@ def input_item_set(item_set_file):
     # output the item production set 
     item_set_data = readin_csv(item_set_file)
     item_list = list(item_set_data.item_code)       # list of items
-    set_list = list(item_set_data.set.unique())
     item_set = {item_list[i]:item_set_data.set[i] for i in range(len(item_list))}
-    return item_set, set_list
+    return item_set
     
 def input_item_alternate(alternate_file):
     # input dm_df_alternate_item: item replacement information
@@ -44,20 +43,8 @@ def input_item_alternate(alternate_file):
     sub_list = list(alter_data.item_code2)          # list of items to sub
     plant_list = list(alter_data.plant)             # list of plants
     period_list = list(alter_data.period)           # list of periods
-    priority_list = list(alter_data.priority_col)   # list of directions
-    alt_list = []
-    alt_dict = {}
-    alt_cost = {}
-    for i in range(len(subbed_list)):
-        if priority_list[i] == 2:
-            alt_list.append((plant_list[i], period_list[i], (subbed_list[i], sub_list[i])))
-            alt_dict[(plant_list[i], period_list[i], (subbed_list[i], sub_list[i]))] = alter_data.multiplier[i]
-            alt_cost[(plant_list[i], period_list[i], (subbed_list[i], sub_list[i]))] = alter_data.alter_cost[i]
-        elif priority_list[i] == 1:
-            alt_list.append((plant_list[i], period_list[i], (sub_list[i], subbed_list[i])))
-            alt_dict[(plant_list[i], period_list[i], (sub_list[i], subbed_list[i]))] = alter_data.multiplier[i]
-            alt_dict[(plant_list[i], period_list[i], (sub_list[i], subbed_list[i]))] = alter_data.alter_cost[i]
-    return alt_list, alt_dict, alt_cost
+    alt_multi = {(subbed_list[i], sub_list[i], plant_list[i], period_list[i]): alter_data.multiplier[i] for i in range(len(subbed_list))}
+    return alt_multi
     
 def input_unit_capacity(unitC_file):
     # input dm_df_unit_capacity: item unit capacity consumption information
@@ -85,17 +72,14 @@ def input_bom(bom_file):
     # input dm_df_bom: item bom relationship information
     # output item bom relationship
     bom_data = readin_csv(bom_file)
-    bom_key = {}
+    bom_key = []
     bom_dict = {}
     for i in range(len(bom_data.assembly)):
-        if bom_data.plant[i] in bom_key.keys():
-            # build up the data structure at the plant level
-            bom_key[bom_data.plant[i]].append((bom_data.assembly[i], bom_data.component[i]))
-            bom_dict[bom_data.plant[i]][(bom_data.assembly[i], bom_data.component[i])] = bom_data.qty[i]
+        if not((bom_data.assembly[i], bom_data.plant[i]) in bom_key):
+            bom_key.append((bom_data.assembly[i], bom_data.plant[i]))
+            bom_dict[(bom_data.assembly[i], bom_data.plant[i])] = {bom_data.component[i]: bom_data.qty[i]}
         else:
-            bom_key[bom_data.plant[i]] = [(bom_data.assembly[i], bom_data.component[i])]
-            bom_dict[bom_data.plant[i]] = {}
-            bom_dict[bom_data.plant[i]][(bom_data.assembly[i], bom_data.component[i])] = bom_data.qty[i]
+            bom_dict[(bom_data.assembly[i], bom_data.plant[i])][bom_data.component[i]] = bom_data.qty[i]
     return bom_key, bom_dict
     
 def input_production(production_file):
@@ -121,7 +105,7 @@ def input_production(production_file):
     
 #%%
 # plant related data
-def input_plant(plant_file):
+def input_capacity(plant_file):
     # input dm_df_plant: plant basic information
     plant_data = readin_csv(plant_file)
     plant_list = list(plant_data.plant)
@@ -145,13 +129,9 @@ def input_capacity(cap_file):
 def input_transit(transit_file):
     # input dm_df_transit: plant transit information
     transit_data = readin_csv(transit_file)
-    transit_list = []
-    for i in range(len(transit_data.item_code)):
-        if not((transit_data.src_plant[i], transit_data.dest_plant[i]) in transit_list):
-            transit_list.append((transit_data.src_plant[i], transit_data.dest_plant[i]))
     transit_time = {(transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]): transit_data.lead_time[i] for i in range(len(transit_data.item_code))}
     transit_cost = {(transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]): transit_data.transit_cost[i] for i in range(len(transit_data.item_code))}
-    return transit_list, transit_time, transit_cost
+    return transit_time, transit_cost
     
 def input_init_inv(init_inv_file):
     # input dm_df_inv: plant initial inventory information
@@ -169,7 +149,7 @@ def input_periods(periods_file):
 def input_po(po_file):
     # input dm_df_po: external purchase information
     po_data = readin_csv(po_file)
-    external_purchase = {(po_data.item_code[i], po_data.plant[i], po_data.period[i]): po_data.qty[i] for i in range(len(po_data.period))}
+    external_purchase = {(po_data.period[i], po_data.item_code[i], po_data.plant[i]): po_data.qty[i] for i in range(len(po_data.period))}
     return external_purchase
     
 def input_demand(demand_file):
