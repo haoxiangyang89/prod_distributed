@@ -17,7 +17,7 @@ import pathos.pools as pp
 from pathos.helpers import cpu_count
 class item_dim():
     rho = 50
-    # 初始化变量
+    # 初始化变量, hard-wired parameter setups
     ite = 0
 
     def __init__(self, s=None):
@@ -27,7 +27,7 @@ class item_dim():
 
         self.N = 16  # T:time 16; 30
         self.M = 40  # J:plant 6/90; 6
-        self.K = 300  # I:item 78/600; 78
+        self.K = 10  # I:item 78/600; 78
 
         self.cL = []
         cLL = np.random.choice(a=[False, True], size=(self.M, self.M), p=[0.9, 0.1])
@@ -173,7 +173,7 @@ class item_dim():
         self.Ksi = np.zeros((self.A, self.M, self.N))
         self.Eta = np.zeros((self.A, self.M, self.N))
 
-    def model_var_setup(self, i):     # 建立item i的model和variable
+    def model_var_setup(self, i):     # 建立item i的model和variable, local problem
         prob = gp.Model("item " + str(i))
 
         '''
@@ -414,6 +414,8 @@ class item_dim():
 
         prob = self.item_model[i]
         # [ui, si, zi, vi, yUIi, yUOi, xCi, rC1i, rC2i] = self.item_var[i]
+        # out_place: forward star, in_place: backward star
+        # load the data structure
         if len(self.out_place[i]) > 0:
             if len(self.in_place[i]) > 0:
                 ui = self.item_var[i][0]
@@ -494,6 +496,7 @@ class item_dim():
                 range(self.M) for t in range(self.N))
                               )
         '''
+        # set up the objective function
         if self.ite == 0:
             if len(self.out_place[i]) > 0:
                 if len(self.in_place[i]) > 0:
@@ -637,6 +640,7 @@ class item_dim():
             elif len(self.in_place[i]) == 0:
                 return [ui.X, si.X, zi.X, vi.X, yUIi.X, yUOi.X, xCi.X]
 
+    # z problem
     def model_item_global(self):
         self.X = np.maximum(0, np.sum(self.rho * self.XC - self.Mu, axis=1)) / (self.rho * self.K)
 
@@ -645,6 +649,8 @@ class item_dim():
                 for t in range(self.N):
                     self.xx[i, :, j, t] = self.X[i][j][t]
 
+        # analytical solution for an unconstrained quadratic program
+        # can try 2n solutions if the z variables are integer
         self.R = np.maximum(0, self.RC1 + self.RC2 - (self.Ksi + self.Eta) / self.rho) / 2
 
         if self.ite > 0:
@@ -654,6 +660,7 @@ class item_dim():
             self.Eta += 1.6 * self.rho * (self.R - self.RC2)
 
     def comp_obj(self):
+        # obtain the objective value when converged
         VV = np.sum(self.V, axis=2)
         ob = np.sum(np.multiply(self.P, self.U)) + np.sum(np.multiply(self.H, VV))
 
