@@ -12,6 +12,7 @@ main structure of running decomposition instances
 from src.readin import *
 from src.GlobalVariable import *
 from src.admm_models import *
+from src.variables import global_var
 
 import os
 from argparse import ArgumentParser
@@ -22,9 +23,12 @@ import math
 import matplotlib.pyplot as plt
 import random
 import multiprocessing
+from functools import partial
 
 from multiprocessing import Pool
 from multiprocessing.managers import BaseManager
+
+from src.params import ADMMparams
 
 def create_gbv(path_file):
     '''
@@ -33,14 +37,14 @@ def create_gbv(path_file):
     gbv = GlobalVariable()
 
     # load the data and form a data structure and create the global instance data frame
-    gbv.item_list, gbv.holding_cost = input_item(os.path.join(path_file, "dm_df_item.csv"))
+    gbv.item_list, gbv.holding_cost, gbv.penalty_cost = input_item(os.path.join(path_file, "dm_df_item.csv"))
     gbv.K = len(gbv.item_list)
     gbv.item_set, gbv.set_list = input_item_set(os.path.join(path_file, "dm_df_item_set.csv"))
     gbv.alt_list, gbv.alt_dict, gbv.alt_cost = input_item_alternate(os.path.join(path_file, "dm_df_alternate_item.csv"))
     gbv.unit_cap, gbv.unit_cap_type = input_unit_capacity(os.path.join(path_file, "dm_df_unit_capacity.csv"))
     gbv.item_plant = input_item_plant(os.path.join(path_file, "dm_df_item_plant.csv"))
     gbv.bom_key, gbv.bom_dict = input_bom(os.path.join(path_file, "dm_df_bom.csv"))
-    gbv.prod_key, gbv.lot_size, gbv.lead_time, gbv.holding_cost, \
+    gbv.prod_key, gbv.lot_size, gbv.lead_time, gbv.component_holding_cost, \
         gbv.prod_cost, gbv.min_prod, gbv.max_prod = input_production(os.path.join(path_file, "dm_df_production.csv"))
     # need a penalty cost for demand mismatch
 
@@ -84,24 +88,24 @@ def parse_arguments():
                         )
     parser.add_argument("-x", "--var",
                         dest="var",
-                        default='[]',
+                        default='./data/vars.json',
                         type=str,
-                        help='Global variables')
-    parser.add_argument("-m", "--max_iter",
-                        default=2000,
-                        dest='max_iter',
+                        help='Global variables specifications')
+    parser.add_argument("-pf", "--params_file",
+                        default="./data/params.json",
+                        dest='params_file',
+                        type=str,
+                        help='Parameter json file location')
+    parser.add_argument("-df", "--data_folder",
+                        default="./data/pilot_test",
+                        dest='data_folder',
+                        type=str,
+                        help='CSV data folder location')
+    parser.add_argument("-th", "--threads",
+                        default=1,
+                        dest='threads',
                         type=int,
-                        help='Maximum number of iterations')
-    parser.add_argument("-e_a", "--eps_abs",
-                        default=0.01,
-                        dest='eps_abs',
-                        type=float,
-                        help='Absolute tolerance level')
-    parser.add_argument("-e_r", "--eps_rel",
-                        dest="eps_rel",
-                        default=0.0001,
-                        type=float,
-                        help='Relative tolerance level')
+                        help='The number of threads')
 
     args = parser.parse_args()
     return args
@@ -112,50 +116,89 @@ gbvManager.register('gbv',GlobalVariable)
 
 # run the ADMM process
 if __name__ == '__main__':
-    # read in the x problem type and the shared variables
+    # read in ADMM meta information
     args = parse_arguments()
+
+    # process the hyperparameters
+    hparams = ADMMparams(args.params_file)
 
     # record the primal/dual residual
     pri_re = []
     d_re = []
 
     # set up maximum iteration and tolerance terms
-    MaxIte = args.max_iter
-    ep_abs = args.eps_abs
-    ep_rel = args.eps_rel
+    # MaxIte = args.max_iter
+    # ep_abs = args.eps_abs
+    # ep_rel = args.eps_rel
 
-    # initialize primal/dual residual及primal/dual tolerance
-    pr = 10
-    dr = 10
-    p_tol = 1e-5
-    d_tol = 1e-5
-
+    # initialize the iteration, primal residual, dual residual
     iter_no = 0
+    pr = hparams.init_pr
+    dr = hparams.init_dr
 
     # obtain the x problem function handle
     x_no = args.number
-    x_prob_create = eval(args.type)
-    gbv_manager = gbvManager()
-    gbv_manager.gbv = create_gbv('./data/pilot_test')
+    x_prob_model = eval(args.type)
+    x_solve = eval("x_solve")
+    z_solve = eval("z_solve")
+    pi_solve = eval("pi_solve")
 
-    # need to register the problem type to the manager!!!!!
-    gbv = gbv_manager.gbv
+    # create a global parameter manager for problem data
+    global gbv
+    gbv = create_gbv(args.data_folder)
 
-    # create all x problems
-    processes = [multiprocessing.Process(target=x_prob_create, args=(i,)) for i in gbv_manager.gbv.item_list]
-    for process in processes:
-        process.start()
-    for process in processes:
-        process.join()
+    # TODO: need to register the problem type to the manager!!!!!
+    # gbv_manager = gbvManager()
 
-    # initialize the primal and dual variables
+    # ------------- initialize the primal and dual variables (needs to do a parallel version) ------------
+    # initialize the primal variables
+    global_vars = x_item_init()
+    global_ind = []
+    prob_list = []
+    for i in gbv.item_list:
+        # initialize the dual variables
+        x_names = x_item_dual_obtain_name(i)
+        global_ind.append(dual_obtain(global_vars, i, x_names))
+        # with Pool(processes=args.threads) as pool:
+        #     global_ind = pool.map(partial(x_item_dual_obtain, global_vars=global_vars), gbv.item_list)
+
+        # initialize the subproblems
+        prob_list.append(x_prob_model(i))
 
     # start timing
     time_start = time.time()
 
-    while pr > p_tol or dr > d_tol:
-       iter_no += 1
-       if iter_no > MaxIte:
-           break
+    UB = math.inf
+    LB = -math.inf
+    rho = 10.0
+    rel_tol = hparams.rel_tol
 
-       # solve x problem
+    while pr > hparams.p_tol or dr > hparams.d_tol:
+       iter_no += 1
+
+       # set up the termination criterion
+       if iter_no > hparams.iter_tol:
+           break
+       else:
+           if UB < math.inf and LB > -math.inf:
+               rel_err = (UB - LB) / (UB + 1e-10)
+               if rel_err < rel_tol:
+                   break
+
+       # solve x problem in parallel
+       local_results = []
+       for i in gbv.item_list:
+           prob_ind = gbv.item_list.index(i)
+           local_sol = x_solve(prob_ind, global_ind[prob_ind], global_vars, rho)
+           local_results.append(local_sol)
+
+       # solve z problem
+       z_solve(local_results, global_ind, global_vars, rho)
+
+       # update dual variables
+       pi_solve(local_results, global_ind, global_vars, rho)
+
+       # primal/dual residual calculation
+
+
+       # upper bound and lower bound calculation

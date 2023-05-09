@@ -25,7 +25,8 @@ def input_item(item_file):
     item_data = readin_csv(item_file)
     item_list = list(item_data.item_code)       # list of items
     holding_cost = {item_list[i]:item_data.holding_cost[i] for i in range(len(item_list))}
-    return item_list, holding_cost
+    penalty_cost = {item_list[i]:item_data.penalty_cost[i] for i in range(len(item_list))}
+    return item_list, holding_cost, penalty_cost
     
 def input_item_set(item_set_file):
     # input dm_df_item_set: item set information
@@ -56,7 +57,7 @@ def input_item_alternate(alternate_file):
         elif priority_list[i] == 1:
             alt_list.append((plant_list[i], period_list[i], (sub_list[i], subbed_list[i])))
             alt_dict[(plant_list[i], period_list[i], (sub_list[i], subbed_list[i]))] = alter_data.multiplier[i]
-            alt_dict[(plant_list[i], period_list[i], (sub_list[i], subbed_list[i]))] = alter_data.alter_cost[i]
+            alt_cost[(plant_list[i], period_list[i], (sub_list[i], subbed_list[i]))] = alter_data.alter_cost[i]
     return alt_list, alt_dict, alt_cost
     
 def input_unit_capacity(unitC_file):
@@ -104,7 +105,7 @@ def input_production(production_file):
     prod_key = []
     lot_size = {}
     lead_time = {}
-    holding_cost = {}
+    component_holding_cost = {}
     prod_cost = {}
     min_prod = {}
     max_prod = {}
@@ -113,11 +114,11 @@ def input_production(production_file):
         prod_key.append(line_key)
         lot_size[line_key] = production_data.lot_size[i]
         lead_time[line_key] = production_data.lead_time[i]
-        holding_cost[line_key] = production_data.component_holding_cost[i]
+        component_holding_cost[line_key] = production_data.component_holding_cost[i]
         prod_cost[line_key] = production_data.production_cost[i]
         min_prod[line_key] = production_data.min_production[i]
         max_prod[line_key] = production_data.max_production[i]
-    return prod_key, lot_size, lead_time, holding_cost, prod_cost, min_prod, max_prod
+    return prod_key, lot_size, lead_time, component_holding_cost, prod_cost, min_prod, max_prod
     
 #%%
 # plant related data

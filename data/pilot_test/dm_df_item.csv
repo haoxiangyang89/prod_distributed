@@ -1,6 +1,6 @@
-﻿item_code,item_type,lt_days,product_category,holding_cost,ito_category,asl,makeorbuy,tolerance,orig_item
-1,1,0,2,0.5,0,0,0,0,0
-2,1,0,3,0.5,0,0,0,0,0
-3,1,0,2,0.5,0,0,0,0,0
-4,1,0,3,0.5,0,0,0,0,0
-5,1,0,1,0.5,0,0,0,0,0
+﻿item_code,item_type,lt_days,product_category,holding_cost,ito_category,asl,makeorbuy,tolerance,orig_item,penalty_cost
+1,1,0,2,0.5,0,0,0,0,0,200
+2,1,0,3,0.5,0,0,0,0,0,100
+3,1,0,2,0.5,0,0,0,0,0,200
+4,1,0,3,0.5,0,0,0,0,0,100
+5,1,0,1,0.5,0,0,0,0,0,100
