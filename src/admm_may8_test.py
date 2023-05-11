@@ -118,7 +118,7 @@ def generate_data(seed):
     # modification
     data["H"] = np.ones((data["K"], data["M"])) * 3   # holding cost
     data["P"] = np.ones((data["K"], data["N"])) * 350  # penalty on unmet demand
-    data["cE"] = [(2, 1), (2, 5)]
+    data["cE"] = [(1, 2), (5, 2)]
 
 
     # gbv.m = 5 * np.ones(gbv.K)
