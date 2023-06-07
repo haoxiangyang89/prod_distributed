@@ -100,4 +100,4 @@ def extensive_prob(solve_option = True, relax_option = False):
         # collect the solution and objective value
         return prob.objVal
     else:
-        return prob, [u, s, z, v, yUI, yUO, xC, wi]
+        return prob, [u, s, z, v, yUI, yUO, xC]

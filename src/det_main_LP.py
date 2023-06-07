@@ -9,11 +9,6 @@ Created on Mon Feb 22 01:01:06 2022
 main structure of running decomposition instances
 '''
 
-from src.readin import *
-from src.GlobalVariable import *
-from src.admm_models import *
-from src.variables import global_var
-
 import os
 from argparse import ArgumentParser
 import numpy as np
@@ -29,6 +24,9 @@ from multiprocessing import Pool
 from multiprocessing.managers import BaseManager
 
 from src.params import ADMMparams
+from src.readin import *
+from src.GlobalVariable import *
+from src.variables import global_var
 
 def create_gbv(path_file):
     '''
@@ -133,37 +131,29 @@ if __name__ == '__main__':
 
     # initialize the iteration, primal residual, dual residual
     iter_no = 0
-    pr = hparams.init_pr
-    dr = hparams.init_dr
+    primal_residual = hparams.init_pr
+    dual_residual = hparams.init_dr
+
+    # create a global parameter manager for problem data
+    global gbv
+    gbv = create_gbv(args.data_folder)
 
     # obtain the x problem function handle
+    from src.admm_models import *
     x_no = args.number
     x_prob_model = eval(args.type)
     x_solve = eval("x_solve")
     z_solve = eval("z_solve")
     pi_solve = eval("pi_solve")
 
-    # create a global parameter manager for problem data
-    global gbv
-    gbv = create_gbv(args.data_folder)
-
     # TODO: need to register the problem type to the manager!!!!!
     # gbv_manager = gbvManager()
 
     # ------------- initialize the primal and dual variables (needs to do a parallel version) ------------
-    # initialize the primal variables
-    global_vars = x_item_init()
-    global_ind = []
-    prob_list = []
-    for i in gbv.item_list:
-        # initialize the dual variables
-        x_names = x_item_dual_obtain_name(i)
-        global_ind.append(dual_obtain(global_vars, i, x_names))
-        # with Pool(processes=args.threads) as pool:
-        #     global_ind = pool.map(partial(x_item_dual_obtain, global_vars=global_vars), gbv.item_list)
-
-        # initialize the subproblems
-        prob_list.append(x_prob_model(i))
+    # initialize the primal local/global variable information
+    global global_vars, global_ind, prob_list
+    global_vars, global_ind, prob_list = x_item_init(x_prob_model)
+    sqrt_dim = np.sqrt(sum(len(global_ind[i][gvar_ind]) for gvar_ind in range(len(global_vars)) for i in range(len(global_ind))))
 
     # start timing
     time_start = time.time()
@@ -173,7 +163,17 @@ if __name__ == '__main__':
     rho = 10.0
     rel_tol = hparams.rel_tol
 
-    while pr > hparams.p_tol or dr > hparams.d_tol:
+    # obtain the initial z solution
+    local_results = []
+    for i in gbv.item_list:
+        prob_ind = gbv.item_list.index(i)
+        local_sol = x_solve(prob_ind, rho, False)
+        local_results.append(local_sol)
+    z_solve(local_results, rho)
+    primal_residual_record = []
+    dual_residual_record = []
+
+    while primal_residual > hparams.p_tol or dual_residual > hparams.d_tol:
        iter_no += 1
 
        # set up the termination criterion
@@ -189,16 +189,25 @@ if __name__ == '__main__':
        local_results = []
        for i in gbv.item_list:
            prob_ind = gbv.item_list.index(i)
-           local_sol = x_solve(prob_ind, global_ind[prob_ind], global_vars, rho)
+           local_sol = x_solve(prob_ind, rho)
            local_results.append(local_sol)
 
-       # solve z problem
-       z_solve(local_results, global_ind, global_vars, rho)
+       # solve z problem, obtain dual residual
+       dual_residual, primal_tol_norm = z_solve(local_results, rho)
 
-       # update dual variables
-       pi_solve(local_results, global_ind, global_vars, rho)
-
-       # primal/dual residual calculation
-
+       # update dual variables, obtain primal residual
+       primal_residual, dual_tol_norm = pi_solve(local_results, rho)
 
        # upper bound and lower bound calculation
+
+       # calculate the primal/dual tolerance
+       primal_tol = sqrt_dim * hparams.eps_abs + hparams.eps_rel * primal_tol_norm
+       dual_tol = sqrt_dim * hparams.eps_abs + hparams.eps_rel * dual_tol_norm
+       primal_residual_record.append(primal_residual)
+       dual_residual_record.append(dual_residual)
+
+       # update the rho penalty term
+       if primal_residual > 10 * dual_residual and primal_residual > primal_tol:
+           rho *= 2
+       elif dual_residual > 10 * primal_residual and dual_residual > dual_tol:
+           rho /= 2
