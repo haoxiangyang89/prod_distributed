@@ -701,7 +701,7 @@ def model_item_global(var):  # solve 2nd block of ADMM, which is to update the g
                 X_heur[:, plant_index, time_index] = global_X_heur(var, plant_index, time_index, "Greedy")
         time_z_heur_end = time.time()
 
-        X_new = X_solver.copy()
+        X_new = X_heur.copy()     # X_new = X_solver.copy()
 
         time_z_solver = time_z_solver_end - time_z_solver_start
         time_z_heur = time_z_heur_end - time_z_solver_start
