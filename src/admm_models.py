@@ -233,7 +233,6 @@ def z_solve(local_results, rho, var_threshold = 1e-6):
 
                 # record the combined global/local vars to calculate the epsilon
                 local_combined.extend(local_results[i][gvar_ind])
-                global_combined.extend(global_vars[gvar_ind].value[global_ind[i][gvar_ind]])
 
         global_var_pre_proc = np.maximum(global_array / (rho * global_counter), 0.0)
         # eliminate values that are very close to zero
@@ -242,6 +241,7 @@ def z_solve(local_results, rho, var_threshold = 1e-6):
         for i in range(I):
             residual_list = rho * (global_var_post_proc[global_ind[i][gvar_ind]] - global_vars[gvar_ind].value[global_ind[i][gvar_ind]])
             dual_residual_sqr += sum(residual_list**2)
+            global_combined.extend(global_var_post_proc[global_ind[i][gvar_ind]])
 
         global_vars[gvar_ind].value = global_var_post_proc
 
