@@ -65,9 +65,8 @@ def input_unit_capacity(unitC_file):
     # output unit capacity, unit capacity type
     unit_cap_data = readin_csv(unitC_file)
     item_list = list(unit_cap_data.item_code)       # list of items
-    plant_list = list(unit_cap_data.plant)             # list of plants
-    unit_cap = {(item_list[i], plant_list[i]):unit_cap_data.unit_capacity[i] for i in range(len(item_list))}
-    unit_cap_type = {(item_list[i], plant_list[i]):unit_cap_data.capacity_type[i] for i in range(len(item_list))}
+    unit_cap = {item_list[i]:unit_cap_data.unit_capacity[i] for i in range(len(item_list))}
+    unit_cap_type = {item_list[i]:unit_cap_data.capacity_type[i] for i in range(len(item_list))}
     return unit_cap, unit_cap_type
     
 def input_item_plant(item_plant_file):
@@ -179,3 +178,61 @@ def input_demand(demand_file):
     real_demand = {(demand_data.item_code[i], demand_data.period[i]): demand_data.order_demand[i] for i in range(len(demand_data.item_code))}
     forecast_demand = {(demand_data.item_code[i], demand_data.period[i]): demand_data.forecast_demand_with_fr[i] for i in range(len(demand_data.item_code))}
     return real_demand, forecast_demand
+
+def timeline_adjustment(gbv):
+    # adjust the gbv's data time to start from 1 with a difference of 1
+    time_start = min(gbv.period_list)
+    time_end = max(gbv.period_list)
+    time_sorted = sorted(gbv.period_list)
+
+    # set up the new list of periods and construct a dictionary for period lookup
+    period_list = [t for t in range(1, time_end - time_start + 2)]
+    period_dict = {}
+    for t in time_sorted:
+        period_dict[t] = t - time_start + 1
+    gbv.period_list = period_list
+    gbv.period_dict = period_dict
+    gbv.T = len(gbv.period_list)
+
+    # change the data in gbv which contains the time aspect
+    # cap_period_list
+    cap_period_list = [gbv.period_dict[t] for t in gbv.cap_period_list]
+    gbv.cap_period_list = cap_period_list
+    # maximum capacity
+    max_cap = {}
+    for ckey in gbv.max_cap.keys():
+        max_cap[ckey] = {}
+        for t in gbv.max_cap[ckey].keys():
+            max_cap[ckey][gbv.period_dict[t]] = gbv.max_cap[ckey][t]
+    gbv.max_cap = max_cap
+
+    # alternative list
+    alt_list = [(item[0], gbv.period_dict[item[1]], item[2]) for item in gbv.alt_list]
+    alt_dict = {}
+    alt_cost = {}
+    for akey in gbv.alt_dict.keys():
+        akey_update = (akey[0], gbv.period_dict[akey[1]], akey[2])
+        alt_dict[akey_update] = gbv.alt_dict[akey]
+        alt_cost[akey_update] = gbv.alt_cost[akey]
+    gbv.alt_list = alt_list
+    gbv.alt_dict = alt_dict
+    gbv.alt_cost = alt_cost
+
+    # demand
+    real_demand = {}
+    forecast_demand = {}
+    for dkey in gbv.real_demand.keys():
+        dkey_update = (dkey[0], gbv.period_dict[dkey[1]])
+        real_demand[dkey_update] = gbv.real_demand[dkey]
+        forecast_demand[dkey_update] = gbv.forecast_demand[dkey]
+    gbv.real_demand = real_demand
+    gbv.forecast_demand = forecast_demand
+
+    # external purchase
+    external_purchase = {}
+    for pkey in gbv.external_purchase:
+        pkey_update = (pkey[0],pkey[1],gbv.period_dict[pkey[2]])
+        external_purchase[pkey_update] = gbv.external_purchase[pkey]
+    gbv.external_purchase = external_purchase
+
+    return gbv

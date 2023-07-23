@@ -6,5 +6,7 @@
   "p_tol": 1e-5,
   "d_tol": 1e-5,
   "rel_tol": 0.01,
-  "iter_tol": 1000
+  "iter_tol": 200,
+  "fixing": true,
+  "fixing_rounds": 10
 }
