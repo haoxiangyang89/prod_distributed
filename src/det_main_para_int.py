@@ -92,9 +92,10 @@ def create_gbv(path_file):
     # load the data and form a data structure and create the global instance data frame
     gbv.item_list, gbv.holding_cost, gbv.penalty_cost = input_item(os.path.join(path_file, "dm_df_item.csv"))
     gbv.K = len(gbv.item_list)
+    gbv.set_dict = input_set(os.path.join(path_file, "dm_df_set.csv"))
     gbv.item_set, gbv.set_list = input_item_set(os.path.join(path_file, "dm_df_item_set.csv"))
     gbv.alt_list, gbv.alt_dict, gbv.alt_cost = input_item_alternate(os.path.join(path_file, "dm_df_alternate_item.csv"))
-    gbv.unit_cap, gbv.unit_cap_type = input_unit_capacity(os.path.join(path_file, "dm_df_unit_capacity.csv"))
+    gbv.unit_cap_set = input_unit_capacity(os.path.join(path_file, "dm_df_unit_capacity.csv"))
     gbv.item_plant = input_item_plant(os.path.join(path_file, "dm_df_item_plant.csv"))
     gbv.bom_key, gbv.bom_dict = input_bom(os.path.join(path_file, "dm_df_bom.csv"))
     gbv.prod_key, gbv.lot_size, gbv.lead_time, gbv.component_holding_cost, \
@@ -243,8 +244,8 @@ def x_item(item_ind, relax_option = True):
                      gp.quicksum(gbv.alt_dict[jta] * rCi[jta] for jta in gbv.alt_list if
                                  (jta[0] == j) and (jta[1] == t) and (jta[2][1] == item_ind))
                      for j in gbv.plant_list for t in gbv.period_list), name="output_item")
-    prob.addConstrs((gp.quicksum(gbv.unit_cap[ii] * xCi[ii,j,t] for ii in gbv.unit_cap.keys() \
-                                 if gbv.item_set[ii] == ct) <= gbv.max_cap[ct,j][t]
+    prob.addConstrs((gp.quicksum(gbv.unit_cap_set[ii,cap_type] * xCi[ii,j,t] for ii,cap_type in gbv.unit_cap_set \
+                                 if gbv.set_dict[ii,j,cap_type] == ct) <= gbv.max_cap[ct,j][t]
                      for j in gbv.plant_list for t in gbv.period_list for ct in gbv.set_list if (item_ind,j) in gbv.prod_key), name='capacity')
     prob.addConstrs((rCi[jta] <= vi[jta[0],jta[1]-1] for jta in gbv.alt_list if jta[2][0] == item_ind), name='r_ub')
     prob.addConstrs((rCi[jta] <= gbv.init_inv[jta[2][0],jta[0]] for jta in gbv.alt_list if (jta[2][1] == item_ind) and (jta[1] == 1)), name='r_ub_rev_ini')
@@ -277,21 +278,21 @@ def x_item_feas(item_ind, relax_option = True, penalty_mag = 1e5):
     alt_i = [alt_item for alt_item in gbv.alt_list if item_ind in alt_item[2]]
 
     # set up model parameters (M: plant, T: time, L: transit,
-    ui = prob.addVars(gbv.period_list, lb=0.0, name="u")  # u_{it} for t, unmet demand
-    si = prob.addVars(gbv.transit_list, gbv.period_list, lb=0.0, name="s")  # s_{ilt} for l,t
-    zi_p = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0, name="z_p")  # z^+_{ijt} for j,t
-    zi_m = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0, name="z_m")  # z^-_{ijt} for j,t
-    vi = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0,
+    ui = prob.addVars(gbv.period_list, lb = 0.0, name="u")  # u_{it} for t, unmet demand
+    si = prob.addVars(gbv.transit_list, gbv.period_list, lb = 0.0, name="s")  # s_{ilt} for l,t
+    zi_p = prob.addVars(gbv.plant_list, gbv.period_list, lb = 0.0, name="z_p")  # z^+_{ijt} for j,t
+    zi_m = prob.addVars(gbv.plant_list, gbv.period_list, lb = 0.0, name="z_m")  # z^-_{ijt} for j,t
+    vi = prob.addVars(gbv.plant_list, gbv.period_list, lb = 0.0,
     ub = sum([gbv.max_prod[item_ind, j] for j in gbv.plant_list]) * len(
         gbv.period_list) * 10, name = "v")  # v_{ijt} for j,t
-    yUIi = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0, name="yi")  # y^{I}_{ijt} for j,t
-    yUOi_p = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0, name="yo_p")  # y^{O,+}_{ijt} for j,t
-    yUOi_m = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0, name="yo_m")  # y^{O,-}_{ijt} for j,t
-    xCi = prob.addVars(prod_plant_i, gbv.period_list, lb=0.0, name="x")  # x_{ijt} for i,j,t (x copy)
+    yUIi = prob.addVars(gbv.plant_list, gbv.period_list, lb = 0.0, name="yi")  # y^{I}_{ijt} for j,t
+    yUOi_p = prob.addVars(gbv.plant_list, gbv.period_list, lb = 0.0, name="yo_p")  # y^{O,+}_{ijt} for j,t
+    yUOi_m = prob.addVars(gbv.plant_list, gbv.period_list, lb = 0.0, name="yo_m")  # y^{O,-}_{ijt} for j,t
+    xCi = prob.addVars(prod_plant_i, gbv.period_list, lb = 0.0, name="x")  # x_{ijt} for i,j,t (x copy)
     if relax_option:
-        wi = prob.addVars(prod_plant_i, gbv.period_list, lb=0.0, name="w")  # w_{ijt} for i,j,t
+        wi = prob.addVars(prod_plant_i, gbv.period_list, lb = 0.0, name="w")  # w_{ijt} for i,j,t
     else:
-        wi = prob.addVars(prod_plant_i, gbv.period_list, vtype=GRB.INTEGER, lb=0.0, name="w")  # w_{ijt} for i,j,t
+        wi = prob.addVars(prod_plant_i, gbv.period_list, vtype=GRB.INTEGER, lb = 0.0, name="w")  # w_{ijt} for i,j,t
 
     # initial condition setup
     ui[0] = 0.0  # initial unmet demand set to 0
@@ -304,7 +305,7 @@ def x_item_feas(item_ind, relax_option = True, penalty_mag = 1e5):
         for t in range(min(gbv.period_list) - gbv.lead_time[i, j], min(gbv.period_list)):
             xCi[i, j, t] = 0.0  # initial production set to 0
 
-    rCi = prob.addVars(alt_i, lb=0.0, name="r")  # r_{ajt} for a=(i,i')
+    rCi = prob.addVars(alt_i, lb = 0.0, name="r")  # r_{ajt} for a=(i,i')
 
     # 0-padding the real demand
     prob.addConstrs((ui[t] - ui[t - 1] + gp.quicksum(zi_p[j, t] - zi_m[j, t] for j in gbv.plant_list) \
@@ -330,10 +331,9 @@ def x_item_feas(item_ind, relax_option = True, penalty_mag = 1e5):
                      gp.quicksum(gbv.alt_dict[jta] * rCi[jta] for jta in gbv.alt_list if
                                  (jta[0] == j) and (jta[1] == t) and (jta[2][1] == item_ind))
                      for j in gbv.plant_list for t in gbv.period_list), name="output_item")
-    prob.addConstrs((gp.quicksum(gbv.unit_cap[ii] * xCi[ii, j, t] for ii in gbv.unit_cap.keys() \
-                                 if gbv.item_set[ii] == ct) <= gbv.max_cap[ct, j][t]
-                     for j in gbv.plant_list for t in gbv.period_list for ct in gbv.set_list if
-                     (item_ind, j) in gbv.prod_key), name='capacity')
+    prob.addConstrs((gp.quicksum(gbv.unit_cap[ii, cap_type] * xCi[ii, j, t] for ii, cap_type in gbv.unit_cap_set \
+                                 if gbv.set_dict[ii, j, cap_type] == ct) <= gbv.max_cap[ct, j][t]
+                     for j in gbv.plant_list for t in gbv.period_list for ct in gbv.set_list if (item_ind, j) in gbv.prod_key), name='capacity')
     prob.addConstrs((rCi[jta] <= vi[jta[0], jta[1] - 1] for jta in gbv.alt_list if jta[2][0] == item_ind), name='r_ub')
     prob.addConstrs(
         (rCi[jta] <= gbv.init_inv[jta[2][0], jta[0]] for jta in gbv.alt_list if (jta[2][1] == item_ind) and (jta[1] == 1)),
@@ -556,8 +556,8 @@ def z_solve_int_solver(local_results, rho, var_threshold = 1e-6, fixing_rounds =
     w_vars = global_mip.addVars(range(len(x_keys)), lb = 0.0, vtype=GRB.INTEGER, name="glb_var")
 
     # set up the capacity constraints
-    global_mip.addConstrs((gp.quicksum(gbv.unit_cap[x_ind[glb_ind][0]] * x_vars[glb_ind] for glb_ind in range(len(x_keys)) \
-                                 if (x_ind[glb_ind][1] == j) and (gbv.item_set[x_ind[glb_ind][0]] == ct) and (x_ind[glb_ind][2] == t)) <= gbv.max_cap[ct,j][t]
+    global_mip.addConstrs((gp.quicksum(gbv.unit_cap.get((x_ind[glb_ind][0],x_ind[glb_ind][1],ct),0) * x_vars[glb_ind] for glb_ind in range(len(x_keys)) \
+                                 if (x_ind[glb_ind][1] == j) and (x_ind[glb_ind][2] == t)) <= gbv.max_cap[ct,j][t]
                      for j in gbv.plant_list for t in gbv.period_list for ct in gbv.set_list), name='capacity')
     global_mip.addConstrs((x_vars[glb_ind] == w_vars[glb_ind] * gbv.lot_size[x_ind[glb_ind][0],x_ind[glb_ind][1]] for glb_ind in range(len(x_keys))), name='batch')
     global_mip.addConstrs((w_vars[glb_ind] <= gbv.max_prod[x_ind[glb_ind][0],x_ind[glb_ind][1]]/gbv.lot_size[x_ind[glb_ind][0],x_ind[glb_ind][1]] for glb_ind in range(len(x_keys))), name='w_ub')
@@ -692,6 +692,7 @@ def z_solve_int_dp(local_results, rho, var_threshold = 1e-6, fixing_param = True
     base_sol = {}
     solution_list = {}
 
+    # We need to fix the capacity handle here!!!!!!!
     for j in gbv.plant_list:
         for t in gbv.period_list:
             for ct in gbv.set_list:

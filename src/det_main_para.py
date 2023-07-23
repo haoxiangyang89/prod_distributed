@@ -92,9 +92,10 @@ def create_gbv(path_file):
     # load the data and form a data structure and create the global instance data frame
     gbv.item_list, gbv.holding_cost, gbv.penalty_cost = input_item(os.path.join(path_file, "dm_df_item.csv"))
     gbv.K = len(gbv.item_list)
+    gbv.set_dict = input_set(os.path.join(path_file, "dm_df_set.csv"))
     gbv.item_set, gbv.set_list = input_item_set(os.path.join(path_file, "dm_df_item_set.csv"))
     gbv.alt_list, gbv.alt_dict, gbv.alt_cost = input_item_alternate(os.path.join(path_file, "dm_df_alternate_item.csv"))
-    gbv.unit_cap, gbv.unit_cap_type = input_unit_capacity(os.path.join(path_file, "dm_df_unit_capacity.csv"))
+    gbv.unit_cap_set = input_unit_capacity(os.path.join(path_file, "dm_df_unit_capacity.csv"))
     gbv.item_plant = input_item_plant(os.path.join(path_file, "dm_df_item_plant.csv"))
     gbv.bom_key, gbv.bom_dict = input_bom(os.path.join(path_file, "dm_df_bom.csv"))
     gbv.prod_key, gbv.lot_size, gbv.lead_time, gbv.component_holding_cost, \
@@ -112,6 +113,8 @@ def create_gbv(path_file):
     gbv.T = len(gbv.period_list)
     gbv.external_purchase = input_po(os.path.join(path_file, "dm_df_po.csv"))
     gbv.real_demand, gbv.forecast_demand = input_demand(os.path.join(path_file, "dm_df_demand.csv"))
+
+    gbv = timeline_adjustment(gbv)
 
     # zero padding for the demand and external purchase
     # we need to change the data into a numpy array form, or maybe sparse tensor
@@ -249,6 +252,96 @@ def x_item(item_ind, relax_option = True):
     theta = prob.addVar(lb = 0.0, name = 'theta')
     prob.addConstr(theta == gp.quicksum(gbv.holding_cost[item_ind] * vi[j,t] for j in gbv.plant_list for t in gbv.period_list) +
                       gp.quicksum(gbv.penalty_cost[item_ind] * ui[t] for t in gbv.period_list), name = 'obj_local')
+
+    prob.update()
+    return prob
+
+def x_item_feas(item_ind, relax_option = True, penalty_mag = 1e5):
+    '''
+    A reformulation of the sub problem to guarantee feasibility for the sub problems
+    item_ind: the index of sub-problem
+    return: the subproblem built with Gurobi
+    '''
+    global gbv
+    prob = gp.Model("item_{}".format(item_ind))
+    prob.setParam("Threads", 1)
+    prob.setParam("OutputFlag", 0)
+
+    # find the prod_key (i_share,j) that shares the plant with item i or has bom relationship with item i
+    prod_plant_i = [(i, j) for i in gbv.item_list for j in gbv.plant_list if \
+                    ((j in gbv.item_plant[item_ind]) and (i, j) in gbv.prod_key) or ((i, item_ind) in gbv.bom_key[j])]
+    alt_i = [alt_item for alt_item in gbv.alt_list if item_ind in alt_item[2]]
+
+    # set up model parameters (M: plant, T: time, L: transit,
+    ui = prob.addVars(gbv.period_list, lb=0.0, name="u")  # u_{it} for t, unmet demand
+    si = prob.addVars(gbv.transit_list, gbv.period_list, lb=0.0, name="s")  # s_{ilt} for l,t
+    zi_p = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0, name="z_p")  # z^+_{ijt} for j,t
+    zi_m = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0, name="z_m")  # z^-_{ijt} for j,t
+    vi = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0,
+    ub = sum([gbv.max_prod[item_ind, j] for j in gbv.plant_list]) * len(
+        gbv.period_list) * 10, name = "v")  # v_{ijt} for j,t
+    yUIi = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0, name="yi")  # y^{I}_{ijt} for j,t
+    yUOi_p = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0, name="yo_p")  # y^{O,+}_{ijt} for j,t
+    yUOi_m = prob.addVars(gbv.plant_list, gbv.period_list, lb=0.0, name="yo_m")  # y^{O,-}_{ijt} for j,t
+    xCi = prob.addVars(prod_plant_i, gbv.period_list, lb=0.0, name="x")  # x_{ijt} for i,j,t (x copy)
+    if relax_option:
+        wi = prob.addVars(prod_plant_i, gbv.period_list, lb=0.0, name="w")  # w_{ijt} for i,j,t
+    else:
+        wi = prob.addVars(prod_plant_i, gbv.period_list, vtype=GRB.INTEGER, lb=0.0, name="w")  # w_{ijt} for i,j,t
+
+    # initial condition setup
+    ui[0] = 0.0  # initial unmet demand set to 0
+    for l in gbv.transit_list:
+        for t in range(min(gbv.period_list) - gbv.transit_time[(item_ind,) + l], min(gbv.period_list)):
+            si[l + (t,)] = 0.0  # initial transportation set to 0
+    for j in gbv.plant_list:
+        vi[j, 0] = gbv.init_inv[item_ind, j]  # initial inventory set to given values
+    for i, j in gbv.prod_key:
+        for t in range(min(gbv.period_list) - gbv.lead_time[i, j], min(gbv.period_list)):
+            xCi[i, j, t] = 0.0  # initial production set to 0
+
+    rCi = prob.addVars(alt_i, lb = 0.0, name="r")  # r_{ajt} for a=(i,i')
+
+    # 0-padding the real demand
+    prob.addConstrs((ui[t] - ui[t - 1] + gp.quicksum(zi_p[j, t] - zi_m[j, t] for j in gbv.plant_list) \
+                     == gbv.real_demand[item_ind, t] for t in gbv.period_list), name='unmet_demand')
+    prob.addConstrs((vi[j, t] - vi[j, t - 1] - yUIi[j, t] + yUOi_p[j, t] - yUOi_m[j, t] == 0 for j in gbv.plant_list \
+                     for t in gbv.period_list), name='inventory')
+    prob.addConstrs((yUIi[j, t] == gp.quicksum(
+        si[l + (t - gbv.transit_time[(item_ind,) + l],)] for l in gbv.transit_list if l[1] == j) +
+                     xCi[item_ind, j, t - gbv.lead_time[item_ind, j]] + gbv.external_purchase[item_ind, j, t] \
+                     for j in gbv.plant_list for t in gbv.period_list if j in gbv.item_plant[item_ind]),
+                    name='input_item_prod')
+    prob.addConstrs((yUIi[j, t] == gp.quicksum(
+        si[l + (t - gbv.transit_time[(item_ind,) + l],)] for l in gbv.transit_list if l[1] == j) +
+                     gbv.external_purchase[item_ind, j, t] for j in gbv.plant_list for t in gbv.period_list if
+                     not (j in gbv.item_plant[item_ind])), name = 'input_item_non_prod')
+    prob.addConstrs((yUOi_p[j, t] - yUOi_m[j, t] == gp.quicksum(si[l + (t,)] for l in gbv.transit_list if l[0] == j) +
+                     gp.quicksum(gbv.bom_dict[j][bk] * xCi[bk[0], j, t] for bk in gbv.bom_key[j] if bk[1] == item_ind) + (zi_p[j, t] - zi_m[j, t]) +
+                     gp.quicksum(gbv.alt_dict[jta] * rCi[jta] for jta in gbv.alt_list if
+                                 (jta[0] == j) and (jta[1] == t) and (jta[2][0] == item_ind)) -
+                     gp.quicksum(gbv.alt_dict[jta] * rCi[jta] for jta in gbv.alt_list if
+                                 (jta[0] == j) and (jta[1] == t) and (jta[2][1] == item_ind))
+                     for j in gbv.plant_list for t in gbv.period_list), name="output_item")
+    prob.addConstrs((gp.quicksum(gbv.unit_cap[ii, cap_type] * xCi[ii, j, t] for ii, cap_type in gbv.unit_cap_set \
+                                 if gbv.set_dict[ii, j, cap_type] == ct) <= gbv.max_cap[ct, j][t]
+                     for j in gbv.plant_list for t in gbv.period_list for ct in gbv.set_list if (item_ind, j) in gbv.prod_key), name='capacity')
+    prob.addConstrs((rCi[jta] <= vi[jta[0], jta[1] - 1] for jta in gbv.alt_list if jta[2][0] == item_ind), name='r_ub')
+    prob.addConstrs(
+        (rCi[jta] <= gbv.init_inv[jta[2][0], jta[0]] for jta in gbv.alt_list if (jta[2][1] == item_ind) and (jta[1] == 1)),
+        name='r_ub_rev_ini')
+    prob.addConstrs((yUOi_p[j, t] - yUOi_m[j, t] <= vi[j, t - 1] for j in gbv.plant_list for t in gbv.period_list), name='yo_ub')
+    prob.addConstrs((xCi[i, j, t] == wi[i, j, t] * gbv.lot_size[i, j] for i, j in prod_plant_i for t in gbv.period_list),
+                    name='batch')
+    prob.addConstrs(
+        (wi[i, j, t] <= gbv.max_prod[i, j] / gbv.lot_size[i, j] for i, j in prod_plant_i for t in gbv.period_list),
+        name='w_ub')
+
+    # set up the subproblem specific objective
+    theta = prob.addVar(lb=0.0, name='theta')
+    prob.addConstr(theta == gp.quicksum(gbv.holding_cost[item_ind] * vi[j, t] + penalty_mag * (zi_m[j, t] + yUOi_m[j, t]) \
+                    for j in gbv.plant_list for t in gbv.period_list) + gp.quicksum(gbv.penalty_cost[item_ind] * ui[t] \
+                    for t in gbv.period_list), name = 'obj_local')
 
     prob.update()
     return prob

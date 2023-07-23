@@ -27,14 +27,26 @@ def input_item(item_file):
     holding_cost = {item_list[i]:item_data.holding_cost[i] for i in range(len(item_list))}
     penalty_cost = {item_list[i]:item_data.penalty_cost[i] for i in range(len(item_list))}
     return item_list, holding_cost, penalty_cost
-    
+
+def input_set(set_file):
+    # input dm_df_set: set-capacity_type information
+    set_data = readin_csv(set_file)
+    item_list = list(set_data.item_code)
+    set_dict = {(set_data.item_code[i], set_data.plant[i], set_data.capacity_type[i]):set_data.set[i] for i in range(len(item_list))}
+    return set_dict
+
 def input_item_set(item_set_file):
     # input dm_df_item_set: item set information
     # output the item production set 
     item_set_data = readin_csv(item_set_file)
     item_list = list(item_set_data.item_code)       # list of items
     set_list = list(item_set_data.set.unique())
-    item_set = {item_list[i]:item_set_data.set[i] for i in range(len(item_list))}
+    item_set = {}
+    for i in range(len(item_list)):
+        if not(item_list[i] in item_set.keys()):
+            item_set[item_list[i]] = [item_set_data.set[i]]
+        else:
+            item_set[item_list[i]].append(item_set_data.set[i])
     return item_set, set_list
     
 def input_item_alternate(alternate_file):
@@ -65,9 +77,8 @@ def input_unit_capacity(unitC_file):
     # output unit capacity, unit capacity type
     unit_cap_data = readin_csv(unitC_file)
     item_list = list(unit_cap_data.item_code)       # list of items
-    unit_cap = {item_list[i]:unit_cap_data.unit_capacity[i] for i in range(len(item_list))}
-    unit_cap_type = {item_list[i]:unit_cap_data.capacity_type[i] for i in range(len(item_list))}
-    return unit_cap, unit_cap_type
+    unit_cap_set = {(item_list[i], unit_cap_data.capacity_type[i]):unit_cap_data.unit_capacity[i] for i in range(len(item_list))}
+    return unit_cap_set
     
 def input_item_plant(item_plant_file):
     # input dm_df_item_plant: item plant information
@@ -235,4 +246,12 @@ def timeline_adjustment(gbv):
         external_purchase[pkey_update] = gbv.external_purchase[pkey]
     gbv.external_purchase = external_purchase
 
+    return gbv
+
+def cap_adjustment(gbv):
+    gbv.unit_cap = {}
+    gbv.plant_set_list = []
+    for skey in gbv.set_dict.keys():
+        gbv.unit_cap[skey[0],skey[1],gbv.set_dict[skey]] = gbv.unit_cap_set[skey[0],skey[2]]
+        gbv.plant_set_list.append((skey[1],gbv.set_dict[skey]))
     return gbv
