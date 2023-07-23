@@ -249,9 +249,15 @@ def timeline_adjustment(gbv):
     return gbv
 
 def cap_adjustment(gbv):
-    gbv.unit_cap = {}
-    gbv.plant_set_list = []
+    unit_cap = {}
+    item_plant_set_list = {}
     for skey in gbv.set_dict.keys():
-        gbv.unit_cap[skey[0],skey[1],gbv.set_dict[skey]] = gbv.unit_cap_set[skey[0],skey[2]]
-        gbv.plant_set_list.append((skey[1],gbv.set_dict[skey]))
+        unit_cap[skey[0],skey[1],gbv.set_dict[skey]] = gbv.unit_cap_set[skey[0],skey[2]]
+        if (skey[0], skey[1]) in item_plant_set_list.keys():
+            item_plant_set_list[skey[0], skey[1]].append(gbv.set_dict[skey])
+        else:
+            item_plant_set_list[skey[0], skey[1]] = [gbv.set_dict[skey]]
+
+    gbv.unit_cap = unit_cap
+    gbv.item_plant_set_list = item_plant_set_list
     return gbv
