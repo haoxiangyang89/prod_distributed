@@ -115,6 +115,7 @@ def create_gbv(path_file):
     gbv.real_demand, gbv.forecast_demand = input_demand(os.path.join(path_file, "dm_df_demand.csv"))
 
     gbv = timeline_adjustment(gbv)
+    gbv = cap_adjustment(gbv)
 
     # zero padding for the demand and external purchase
     # we need to change the data into a numpy array form, or maybe sparse tensor
@@ -244,9 +245,9 @@ def x_item(item_ind, relax_option = True):
                      gp.quicksum(gbv.alt_dict[jta] * rCi[jta] for jta in gbv.alt_list if
                                  (jta[0] == j) and (jta[1] == t) and (jta[2][1] == item_ind))
                      for j in gbv.plant_list for t in gbv.period_list), name="output_item")
-    prob.addConstrs((gp.quicksum(gbv.unit_cap_set[ii,cap_type] * xCi[ii,j,t] for ii,cap_type in gbv.unit_cap_set \
-                                 if gbv.set_dict[ii,j,cap_type] == ct) <= gbv.max_cap[ct,j][t]
-                     for j in gbv.plant_list for t in gbv.period_list for ct in gbv.set_list if (item_ind,j) in gbv.prod_key), name='capacity')
+    prob.addConstrs((gp.quicksum(gbv.unit_cap[i_iter, j_iter, ct_iter] * xCi[i_iter, j_iter, t] for i_iter, j_iter, ct_iter in gbv.unit_cap.keys()
+                                 if (j_iter == j) and (ct == ct_iter)) <= gbv.max_cap[ct, j][t]
+                     for ct, j in gbv.max_cap.keys() for t in gbv.period_list if (item_ind, j) in gbv.prod_key), name='capacity')
     prob.addConstrs((rCi[jta] <= vi[jta[0],jta[1]-1] for jta in gbv.alt_list if jta[2][0] == item_ind), name='r_ub')
     prob.addConstrs((rCi[jta] <= gbv.init_inv[jta[2][0],jta[0]] for jta in gbv.alt_list if (jta[2][1] == item_ind) and (jta[1] == 1)), name='r_ub_rev_ini')
     prob.addConstrs((yUOi[j,t] <= vi[j,t-1] for j in gbv.plant_list for t in gbv.period_list), name='yo_ub')
@@ -331,9 +332,9 @@ def x_item_feas(item_ind, relax_option = True, penalty_mag = 1e5):
                      gp.quicksum(gbv.alt_dict[jta] * rCi[jta] for jta in gbv.alt_list if
                                  (jta[0] == j) and (jta[1] == t) and (jta[2][1] == item_ind))
                      for j in gbv.plant_list for t in gbv.period_list), name="output_item")
-    prob.addConstrs((gp.quicksum(gbv.unit_cap[ii, cap_type] * xCi[ii, j, t] for ii, cap_type in gbv.unit_cap_set \
-                                 if gbv.set_dict[ii, j, cap_type] == ct) <= gbv.max_cap[ct, j][t]
-                     for j in gbv.plant_list for t in gbv.period_list for ct in gbv.set_list if (item_ind, j) in gbv.prod_key), name='capacity')
+    prob.addConstrs((gp.quicksum(gbv.unit_cap[i_iter, j_iter, ct_iter] * xCi[i_iter, j_iter, t] for i_iter, j_iter, ct_iter in gbv.unit_cap.keys()
+                                 if (j_iter == j) and (ct == ct_iter)) <= gbv.max_cap[ct, j][t]
+                     for ct, j in gbv.max_cap.keys() for t in gbv.period_list if (item_ind, j) in gbv.prod_key), name='capacity')
     prob.addConstrs((rCi[jta] <= vi[jta[0], jta[1] - 1] for jta in gbv.alt_list if jta[2][0] == item_ind), name='r_ub')
     prob.addConstrs(
         (rCi[jta] <= gbv.init_inv[jta[2][0], jta[0]] for jta in gbv.alt_list if (jta[2][1] == item_ind) and (jta[1] == 1)),

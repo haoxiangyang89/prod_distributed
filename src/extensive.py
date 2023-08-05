@@ -65,9 +65,9 @@ def extensive_prob(solve_option = True, relax_option = False):
                                  (jta[0] == j) and (jta[1] == t) and (jta[2][1] == i))
                      for i in gbv.item_list for j in gbv.plant_list for t in gbv.period_list),
                     name="output_item")
-    prob.addConstrs((gp.quicksum(gbv.unit_cap[ii, jj] * xC[ii, jj, t] for ii, jj in gbv.unit_cap.keys() \
-                                 if (jj == j) and (gbv.item_set[ii] == ct)) <= gbv.max_cap[ct, j][t]
-                    for j in gbv.plant_list for t in gbv.period_list for ct in gbv.set_list), name='capacity')
+    prob.addConstrs((gp.quicksum(gbv.unit_cap[i_iter, j_iter, ct_iter] * xC[i_iter, j_iter, t] for i_iter, j_iter, ct_iter in gbv.unit_cap.keys()
+                                 if (j_iter == j) and (ct == ct_iter)) <= gbv.max_cap[ct, j][t]
+                     for ct, j in gbv.max_cap.keys() for t in gbv.period_list), name='capacity')
     prob.addConstrs((rC[jta] <= v[i, jta[0], jta[1] - 1] for i in gbv.item_list for jta in gbv.alt_list if jta[2][0] == i),
                     name='r_ub')
     prob.addConstrs((yUO[i, j, t] <= v[i, j, t - 1] for i in gbv.item_list for j in gbv.plant_list for t in gbv.period_list),
