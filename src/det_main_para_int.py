@@ -686,13 +686,10 @@ def z_solve_int_dp(local_results, rho, var_threshold = 1e-6, fixing_param = True
     x_ind = global_var_const["indices"][gvar_ind]
 
     # initialize the data structure
-    # option_list = {}
     benefit_list = {}
-    unit_capacity_list = {}
     capacity_remain = {}
     base_sol = {}
     solution_list = {}
-    cap_type = {}
 
     # obtain the candidate solutions
     for ct, j in gbv.max_cap.keys():
@@ -743,10 +740,11 @@ def z_solve_int_dp(local_results, rho, var_threshold = 1e-6, fixing_param = True
             # obtain the state space
             ct_list = []
             ct_cap_list = []
-            for ct, jj in capacity_remain.keys():
-                if capacity_remain[ct, j, t] > 0:
-                   ct_list.append(ct)
-                   ct_cap_list.append(int(capacity_remain[ct, j, t]) + 1)
+            for ct, jj, tt in capacity_remain.keys():
+                if (jj == j) and (tt == t):
+                    if capacity_remain[ct, j, t] > 0:
+                       ct_list.append(ct)
+                       ct_cap_list.append(int(capacity_remain[ct, j, t]) + 1)
 
             # initialize vList to represent the value function
             vList = np.zeros(ct_cap_list)            # 0 included
@@ -776,11 +774,13 @@ def z_solve_int_dp(local_results, rho, var_threshold = 1e-6, fixing_param = True
 
             # add the base solution back
 
-            vMax = np.argmax(vList)
+            vMax = list(np.unravel_index(vList.argmax(), vList.shape))
             for i_ind in range(len(i_order)-1,-1,-1):
                 i = i_order[i_ind]
-                base_sol[i, j, t] += aList[i][vMax]
-                vMax -= int(aList[i][vMax] * gbv.unit_cap[i] * gbv.lot_size[i, j])
+                base_sol[i, j, t] += aList[i][tuple(vMax)]
+                for ct_ind in range(len(ct_list)):
+                    ct = ct_list[ct_ind]
+                    vMax[ct_ind] -= int(aList[i][vMax] * gbv.unit_cap[i, j, ct] * gbv.lot_size[i, j])
 
     for vi in x_ind:
         local_dict["value"][gvar_ind][x_ind.index(vi)] = base_sol[vi[0], vi[1], vi[2]] * gbv.lot_size[vi[0], vi[1]]
@@ -838,7 +838,7 @@ if __name__ == '__main__':
     hparams = ADMMparams("params.json")
     x_prob_model = eval("x_item_feas")
     x_solve = eval("x_solve")
-    z_solve = eval("z_solve_int_solver")
+    z_solve = eval("z_solve_int_dp")
     pi_solve = eval("pi_solve")
 
     # record the primal/dual residual
