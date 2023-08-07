@@ -557,9 +557,9 @@ def z_solve_int_solver(local_results, rho, var_threshold = 1e-6, fixing_rounds =
     w_vars = global_mip.addVars(range(len(x_keys)), lb = 0.0, vtype=GRB.INTEGER, name="glb_var")
 
     # set up the capacity constraints
-    global_mip.addConstrs((gp.quicksum(gbv.unit_cap.get((x_ind[glb_ind][0],x_ind[glb_ind][1],ct),0) * x_vars[glb_ind] for glb_ind in range(len(x_keys)) \
-                                 if (x_ind[glb_ind][1] == j) and (x_ind[glb_ind][2] == t)) <= gbv.max_cap[ct,j][t]
-                     for j in gbv.plant_list for t in gbv.period_list for ct in gbv.set_list), name='capacity')
+    global_mip.addConstrs((gp.quicksum(gbv.unit_cap.get((x_ind[glb_ind][0], x_ind[glb_ind][1], ct),0) * x_vars[glb_ind] for glb_ind in range(len(x_keys)) \
+                                 if (x_ind[glb_ind][1] == j) and (x_ind[glb_ind][2] == t)) <= gbv.max_cap[ct, j][t]
+                     for ct, j in gbv.max_cap.keys() for t in gbv.period_list), name='capacity')
     global_mip.addConstrs((x_vars[glb_ind] == w_vars[glb_ind] * gbv.lot_size[x_ind[glb_ind][0],x_ind[glb_ind][1]] for glb_ind in range(len(x_keys))), name='batch')
     global_mip.addConstrs((w_vars[glb_ind] <= gbv.max_prod[x_ind[glb_ind][0],x_ind[glb_ind][1]]/gbv.lot_size[x_ind[glb_ind][0],x_ind[glb_ind][1]] for glb_ind in range(len(x_keys))), name='w_ub')
 
@@ -692,83 +692,95 @@ def z_solve_int_dp(local_results, rho, var_threshold = 1e-6, fixing_param = True
     capacity_remain = {}
     base_sol = {}
     solution_list = {}
+    cap_type = {}
 
-    # We need to fix the capacity handle here!!!!!!!
-    for j in gbv.plant_list:
+    # obtain the candidate solutions
+    for ct, j in gbv.max_cap.keys():
         for t in gbv.period_list:
-            for ct in gbv.set_list:
-                # option_list[ct, j, t] = []
-                benefit_list[ct, j, t] = {}
-                solution_list[ct, j, t] = {}
-
-                capacity_remain[ct, j, t] = gbv.max_cap[ct, j][t]
-                unit_capacity_list[ct, j, t] = []
-                for vi in x_ind:
-                    # record the base solution and update the remaining capacity
-                    if (vi[1] == j) and (vi[2] == t) and (gbv.unit_cap_type[vi[0]] == ct):
-                        wfrac = local_dict["value"][gvar_ind][x_ind.index(vi)] / gbv.lot_size[vi[0], vi[1]]
-                        # if the fractional solution is an integer
-                        if abs(wfrac - np.round(wfrac)) < var_threshold:
-                            base_sol[vi] = np.round(wfrac)           # no need to do DP
-                        else:
-                            # round down the fractional solution
-                            wfloor = np.floor(wfrac)
-                            # if round down is 0, then no need to perform -1
-                            if wfloor == 0.0:
-                                base_sol[vi] = 0.0
-                                if wfrac > 0.5:
-                                    temp_benefit = (wfrac - (base_sol[vi] + 1)) ** 2 - (wfrac - base_sol[vi]) ** 2
-                                    # option_list[ct, j, t].append(gbv.unit_cap[vi[0]] * gbv.lot_size[vi[0], vi[1]])
-                                    benefit_list[ct, j, t][vi[0]] = [-temp_benefit]
-                                    solution_list[ct, j, t][vi[0]] = [1]
-                            else:
-                                base_sol[vi] = wfloor - 1
+            benefit_list[j, t] = {}
+            solution_list[j, t] = {}
+            if t in gbv.max_cap[ct, j].keys():
+                if gbv.max_cap[ct, j][t] > 0:
+                    capacity_remain[ct, j, t] = gbv.max_cap[ct, j][t]
+                else:
+                    capacity_remain[ct, j, t] = 0
+            else:
+                capacity_remain[ct, j, t] = 0
+    for vi in x_ind:
+        # record the base solution and update the remaining capacity
+        for ct, j in gbv.max_cap.keys():
+            for t in gbv.period_list:
+                if (vi[1] == j) and (vi[2] == t) and ((vi[0], j, ct) in gbv.unit_cap.keys()):
+                    wfrac = local_dict["value"][gvar_ind][x_ind.index(vi)] / gbv.lot_size[vi[0], vi[1]]
+                    # if the fractional solution is an integer
+                    if abs(wfrac - np.round(wfrac)) < var_threshold:
+                        base_sol[vi] = np.round(wfrac)  # no need to do DP
+                    else:
+                        # round down the fractional solution
+                        wfloor = np.floor(wfrac)
+                        # if round down is 0, then no need to perform -1
+                        if wfloor == 0.0:
+                            base_sol[vi] = 0.0
+                            if wfrac > 0.5:
                                 temp_benefit = (wfrac - (base_sol[vi] + 1)) ** 2 - (wfrac - base_sol[vi]) ** 2
-                                # option_list[ct, j, t].append(gbv.unit_cap[vi[0]] * gbv.lot_size[vi[0], vi[1]])
-                                benefit_list[ct, j, t][vi[0]] = [-temp_benefit]
-                                solution_list[ct, j, t][vi[0]] = [1]
-                                # if the ceiling solution <= upper bound
-                                if wfloor + 1 < gbv.max_prod[vi[0], j] / gbv.lot_size[vi[0], j]:
-                                    temp_benefit = (wfrac - (base_sol[vi] + 2)) ** 2 - (wfrac - base_sol[vi]) ** 2
-                                    if temp_benefit < 0:
-                                        # option_list[ct, j, t].append(gbv.unit_cap[vi[0]] * 2 * gbv.lot_size[vi[0], vi[1]])
-                                        benefit_list[ct, j, t][vi[0]].append(-temp_benefit)
-                                        solution_list[ct, j, t][vi[0]].append(2)
-
-                        capacity_remain[gbv.unit_cap_type[vi[0]], j, t] -= base_sol[vi] * gbv.unit_cap[vi[0]] * gbv.lot_size[vi[0], vi[1]]
+                                benefit_list[j, t][vi[0]] = [-temp_benefit]
+                                solution_list[j, t][vi[0]] = [1]
+                        else:
+                            base_sol[vi] = wfloor - 1
+                            temp_benefit = (wfrac - (base_sol[vi] + 1)) ** 2 - (wfrac - base_sol[vi]) ** 2
+                            benefit_list[j, t][vi[0]] = [-temp_benefit]
+                            solution_list[j, t][vi[0]] = [1]
+                            # if the ceiling solution <= upper bound
+                            if wfloor + 1 < gbv.max_prod[vi[0], j] / gbv.lot_size[vi[0], j]:
+                                temp_benefit = (wfrac - (base_sol[vi] + 2)) ** 2 - (wfrac - base_sol[vi]) ** 2
+                                if temp_benefit < 0:
+                                    benefit_list[j, t][vi[0]].append(-temp_benefit)
+                                    solution_list[j, t][vi[0]].append(2)
 
     # value iteration
-    for ct in gbv.set_list:
-        for j in gbv.plant_list:
-            for t in gbv.period_list:
-                # initialize vList to represent the value function
-                vList = np.zeros(int(capacity_remain[ct, j, t]) + 1)            # 0 included
-                # initialize aList to represent the actions
-                aList = {}
-                i_order = []
-                for i in solution_list[ct, j, t].keys():
-                    compareList = [vList]
-                    compareList_ind = [0]
-                    i_order.append(i)
-                    aList[i] = np.zeros(int(capacity_remain[ct, j, t]) + 1)
-                    for option_ind in range(len(solution_list[ct, j, t][i])):
-                        option_len = gbv.unit_cap[i] * gbv.lot_size[i, j] * solution_list[ct, j, t][i][option_ind]
-                        benefit = benefit_list[ct, j, t][i][option_ind]
-                        effectList = -1 * np.ones(int(capacity_remain[ct, j, t]) + 1)
-                        effectList[option_len:] = vList[:int((capacity_remain[ct, j, t] + 1 - option_len))] + benefit
-                        compareList.append(effectList)
-                        compareList_ind.append(solution_list[ct, j, t][i][option_ind])
-                    # obtain the value list with the option utilized
-                    vList = np.maximum.reduce(compareList)
-                    aList[i] = np.maximum.reduce([(vList == compareList[option_ind]) * compareList_ind[option_ind] for option_ind in range(len(compareList))])
+    for j in gbv.plant_list:
+        for t in gbv.period_list:
+            # obtain the state space
+            ct_list = []
+            ct_cap_list = []
+            for ct, jj in capacity_remain.keys():
+                if capacity_remain[ct, j, t] > 0:
+                   ct_list.append(ct)
+                   ct_cap_list.append(int(capacity_remain[ct, j, t]) + 1)
 
-                # add the base solution back
+            # initialize vList to represent the value function
+            vList = np.zeros(ct_cap_list)            # 0 included
+            # initialize aList to represent the actions
+            aList = {}
+            i_order = []
+            for i in solution_list[j, t].keys():
+                compareList = [vList]
+                compareList_ind = [0]
+                i_order.append(i)
+                aList[i] = np.zeros(ct_cap_list)
+                for option_ind in range(len(solution_list[j, t][i])):
+                    option_len = [gbv.unit_cap[i, j, ct] * gbv.lot_size[i, j] * solution_list[j, t][i][option_ind] for ct in ct_list]
+                    end_len = [int((capacity_remain[ct_list[ct_ind], j, t] + 1 - option_len[ct_ind])) for ct_ind in range(len(ct_list))]
+                    benefit = benefit_list[j, t][i][option_ind]
+                    effectList = -1 * np.ones(ct_cap_list)
+                    indexing_start = tuple(slice(start_idx, None) for start_idx in option_len) + (slice(None),) * (
+                                effectList.ndim - len(option_len))
+                    indexing_end = tuple(slice(None, end_idx) for end_idx in end_len) + (slice(None),) * (
+                                effectList.ndim - len(option_len))
+                    effectList[indexing_start] = vList[indexing_end] + benefit
+                    compareList.append(effectList)
+                    compareList_ind.append(solution_list[j, t][i][option_ind])
+                # obtain the value list with the option utilized
+                vList = np.maximum.reduce(compareList)
+                aList[i] = np.maximum.reduce([(vList == compareList[option_ind]) * compareList_ind[option_ind] for option_ind in range(len(compareList))])
 
-                vMax = np.argmax(vList)
-                for i_ind in range(len(i_order)-1,-1,-1):
-                    i = i_order[i_ind]
-                    base_sol[i, j, t] += aList[i][vMax]
-                    vMax -= int(aList[i][vMax] * gbv.unit_cap[i] * gbv.lot_size[i, j])
+            # add the base solution back
+
+            vMax = np.argmax(vList)
+            for i_ind in range(len(i_order)-1,-1,-1):
+                i = i_order[i_ind]
+                base_sol[i, j, t] += aList[i][vMax]
+                vMax -= int(aList[i][vMax] * gbv.unit_cap[i] * gbv.lot_size[i, j])
 
     for vi in x_ind:
         local_dict["value"][gvar_ind][x_ind.index(vi)] = base_sol[vi[0], vi[1], vi[2]] * gbv.lot_size[vi[0], vi[1]]
@@ -824,9 +836,9 @@ if __name__ == '__main__':
     data_folder = "../data/small_test"
     # process the hyperparameters
     hparams = ADMMparams("params.json")
-    x_prob_model = eval("x_item")
+    x_prob_model = eval("x_item_feas")
     x_solve = eval("x_solve")
-    z_solve = eval("z_solve_int_dp")
+    z_solve = eval("z_solve_int_solver")
     pi_solve = eval("pi_solve")
 
     # record the primal/dual residual
@@ -877,8 +889,7 @@ if __name__ == '__main__':
        local_results = pool.map(partial(x_solve, rho=rho), range(len(gbv.item_list)))
 
        # solve z problem, obtain dual residual
-       dual_residual, primal_tol_norm = z_solve_int_solver(local_results, rho)
-       # dual_residual, primal_tol_norm = z_solve_int_dp(local_results, rho)
+       dual_residual, primal_tol_norm = z_solve(local_results, rho)
 
        # update dual variables, obtain primal residual
        primal_residual, dual_tol_norm = pi_solve(local_results, rho)
@@ -890,10 +901,10 @@ if __name__ == '__main__':
            LB = np.maximum(sum(lb_results), LB)
            # to calculate the lower bound, the global part of the objective includes the global variables
            # the sum of dual variables should be 0 for LP, for IP?
-           lambda_list = []
-           for gvar_ind in range(len(global_var_const["name"])):
-               lambda_list.append(np.sum(global_vars["dual"][i][gvar_ind] for i in range(len(gbv.item_list))))
-           assert np.sum(lambda_list) < 1e-4
+           # lambda_list = []
+           # for gvar_ind in range(len(global_var_const["name"])):
+           #     lambda_list.append(np.sum(global_vars["dual"][gvar_ind][i] for i in range(len(gbv.item_list))))
+           # assert np.sum(lambda_list) < 1e-4
        if not (np.inf in ub_results):
            UB = np.minimum(sum(ub_results), UB)
 
@@ -903,7 +914,8 @@ if __name__ == '__main__':
        primal_residual_record.append(primal_residual)
        dual_residual_record.append(dual_residual)
        iter_elapsed_time = time.time() - iter_start_time
-       print("------- Iteration {}, Primal Residual = {}, Dual Residual = {}, Rho = {}, iter_time = {}".format(iter_no, np.round(primal_residual, 2), np.round(dual_residual, 2), rho, np.round(iter_elapsed_time,2)))
+       print("------- Iteration {}, Primal Residual = {}, Dual Residual = {}, Rho = {}, LB = {}, UB = {}, iter_time = {}".format(\
+           iter_no, np.round(primal_residual, 2), np.round(dual_residual, 2), rho, np.round(LB, 2), np.round(UB, 2), np.round(iter_elapsed_time,2)))
 
        # update the rho penalty term
        if (primal_residual > 10 * dual_residual) and (primal_residual > primal_tol):

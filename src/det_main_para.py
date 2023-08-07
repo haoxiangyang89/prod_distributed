@@ -115,6 +115,7 @@ def create_gbv(path_file):
     gbv.real_demand, gbv.forecast_demand = input_demand(os.path.join(path_file, "dm_df_demand.csv"))
 
     gbv = timeline_adjustment(gbv)
+    gbv = cap_adjustment(gbv)
 
     # zero padding for the demand and external purchase
     # we need to change the data into a numpy array form, or maybe sparse tensor
@@ -239,9 +240,9 @@ def x_item(item_ind, relax_option = True):
                      gp.quicksum(gbv.alt_dict[jta] * rCi[jta] for jta in gbv.alt_list if
                                  (jta[0] == j) and (jta[1] == t) and (jta[2][1] == item_ind))
                      for j in gbv.plant_list for t in gbv.period_list), name="output_item")
-    prob.addConstrs((gp.quicksum(gbv.unit_cap[ii,jj] * xCi[ii,jj,t] for ii,jj in gbv.unit_cap.keys() \
-                                 if (jj == j) and (gbv.item_set[ii] == ct)) <= gbv.max_cap[ct,j][t]
-                     for j in gbv.plant_list for t in gbv.period_list for ct in gbv.set_list if (item_ind,j) in gbv.prod_key), name='capacity')
+    prob.addConstrs((gp.quicksum(gbv.unit_cap[i_iter, j_iter, ct_iter] * xCi[i_iter, j_iter, t] for i_iter, j_iter, ct_iter in gbv.unit_cap.keys()
+                                 if (j_iter == j) and (ct == ct_iter)) <= gbv.max_cap[ct, j][t]
+                     for ct, j in gbv.max_cap.keys() for t in gbv.period_list if (item_ind, j) in gbv.prod_key), name='capacity')
     prob.addConstrs((rCi[jta] <= vi[jta[0],jta[1]-1] for jta in gbv.alt_list if jta[2][0] == item_ind), name='r_ub')
     prob.addConstrs((rCi[jta] <= gbv.init_inv[jta[2][0],jta[0]] for jta in gbv.alt_list if (jta[2][1] == item_ind) and (jta[1] == 1)), name='r_ub_rev_ini')
     prob.addConstrs((yUOi[j,t] <= vi[j,t-1] for j in gbv.plant_list for t in gbv.period_list), name='yo_ub')
@@ -323,9 +324,9 @@ def x_item_feas(item_ind, relax_option = True, penalty_mag = 1e5):
                      gp.quicksum(gbv.alt_dict[jta] * rCi[jta] for jta in gbv.alt_list if
                                  (jta[0] == j) and (jta[1] == t) and (jta[2][1] == item_ind))
                      for j in gbv.plant_list for t in gbv.period_list), name="output_item")
-    prob.addConstrs((gp.quicksum(gbv.unit_cap[ii, cap_type] * xCi[ii, j, t] for ii, cap_type in gbv.unit_cap_set \
-                                 if gbv.set_dict[ii, j, cap_type] == ct) <= gbv.max_cap[ct, j][t]
-                     for j in gbv.plant_list for t in gbv.period_list for ct in gbv.set_list if (item_ind, j) in gbv.prod_key), name='capacity')
+    prob.addConstrs((gp.quicksum(gbv.unit_cap[i_iter, j_iter, ct_iter] * xCi[i_iter, j_iter, t] for i_iter, j_iter, ct_iter in gbv.unit_cap.keys()
+                                 if (j_iter == j) and (ct == ct_iter)) <= gbv.max_cap[ct, j][t]
+                     for ct, j in gbv.max_cap.keys() for t in gbv.period_list if (item_ind, j) in gbv.prod_key), name='capacity')
     prob.addConstrs((rCi[jta] <= vi[jta[0], jta[1] - 1] for jta in gbv.alt_list if jta[2][0] == item_ind), name='r_ub')
     prob.addConstrs(
         (rCi[jta] <= gbv.init_inv[jta[2][0], jta[0]] for jta in gbv.alt_list if (jta[2][1] == item_ind) and (jta[1] == 1)),
@@ -447,11 +448,9 @@ def x_solve_lb(i):
     obj_local_part = prob.getVarByName("theta")
 
     time_init = time.time()
-    prob.setObjective(obj_local_part -
-                      gp.quicksum(global_vars["dual"][gvar_ind][i][vi] * (prob.getVarByName(
-                          global_var_const["keys"][gvar_ind][vi]) - global_vars["value"][gvar_ind][vi]) \
-                                  for gvar_ind in range(len(global_var_const["name"])) \
-                                  for vi in global_ind_i[gvar_ind]), GRB.MINIMIZE)
+    prob.setObjective(obj_local_part - gp.quicksum(global_vars["dual"][gvar_ind][i][vi] * prob.getVarByName(
+                          global_var_const["keys"][gvar_ind][vi]) for gvar_ind in range(len(global_var_const["name"])) \
+                                                   for vi in global_ind_i[gvar_ind]), GRB.MINIMIZE)
     # solve the problem
     prob.update()
     time_obj = time.time()
@@ -609,7 +608,7 @@ if __name__ == '__main__':
     data_folder = "../data/small_test"
     # process the hyperparameters
     hparams = ADMMparams("params.json")
-    x_prob_model = eval("x_item")
+    x_prob_model = eval("x_item_feas")
     x_solve = eval("x_solve")
     z_solve = eval("z_solve")
     pi_solve = eval("pi_solve")
@@ -688,3 +687,5 @@ if __name__ == '__main__':
            rho *= 2
        elif (dual_residual > 10 * primal_residual) and (dual_residual > dual_tol):
            rho /= 2
+
+    print(LB, UB)
