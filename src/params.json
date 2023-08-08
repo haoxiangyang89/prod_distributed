@@ -1,0 +1,12 @@
+{
+  "init_pr": 10,
+  "init_dr": 10,
+  "eps_abs": 1e-5,
+  "eps_rel": 1e-2,
+  "p_tol": 1e-5,
+  "d_tol": 1e-5,
+  "rel_tol": 0.01,
+  "iter_tol": 300,
+  "fixing": true,
+  "fixing_rounds": 10
+}
