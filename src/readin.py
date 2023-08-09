@@ -156,13 +156,13 @@ def input_capacity(cap_file):
 def input_transit(transit_file):
     # input dm_df_transit: plant transit information
     transit_data = readin_csv(transit_file)
-    transit_list = []
+    item_transit_list = []
     for i in range(len(transit_data.item_code)):
-        if not((transit_data.src_plant[i], transit_data.dest_plant[i]) in transit_list):
-            transit_list.append((transit_data.src_plant[i], transit_data.dest_plant[i]))
+        if not((transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]) in item_transit_list):
+            item_transit_list.append((transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]))
     transit_time = {(transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]): transit_data.lead_time[i] for i in range(len(transit_data.item_code))}
     transit_cost = {(transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]): transit_data.transit_cost[i] for i in range(len(transit_data.item_code))}
-    return transit_list, transit_time, transit_cost
+    return item_transit_list, transit_time, transit_cost
     
 def input_init_inv(init_inv_file):
     # input dm_df_inv: plant initial inventory information
@@ -218,7 +218,10 @@ def timeline_adjustment(gbv):
     gbv.max_cap = max_cap
 
     # alternative list
-    alt_list = [(item[0], gbv.period_dict[item[1]], item[2]) for item in gbv.alt_list]
+    alt_list = []
+    for item in gbv.alt_list:
+        if not((item[0], gbv.period_dict[item[1]], item[2]) in alt_list):
+            alt_list.append((item[0], gbv.period_dict[item[1]], item[2]))
     alt_dict = {}
     alt_cost = {}
     for akey in gbv.alt_dict.keys():

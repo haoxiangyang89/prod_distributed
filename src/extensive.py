@@ -20,7 +20,7 @@ def extensive_prob(solve_option = True, relax_option = False):
 
     # set up model parameters (M: plant, T: time, L: transit,
     u = prob.addVars(gbv.item_list, gbv.period_list, lb=0.0, name="u")  # u_{it} for t, unmet demand
-    s = prob.addVars(gbv.item_list, gbv.transit_list, gbv.period_list, lb=0.0, name="s")  # s_{ilt} for l,t
+    s = prob.addVars(gbv.transit_list, gbv.period_list, lb=0.0, name="s")  # s_{ilt} for l,t
     z = prob.addVars(gbv.item_list, gbv.plant_list, gbv.period_list, name="z")  # z_{ijt} for j,t
     v = prob.addVars(gbv.item_list, gbv.plant_list, gbv.period_list, lb=0.0, name="v")  # v_{ijt} for j,t
     yUI = prob.addVars(gbv.item_list, gbv.plant_list, gbv.period_list, lb=0.0, name="yi")  # y^{I}_{ijt} for j,t
@@ -30,10 +30,9 @@ def extensive_prob(solve_option = True, relax_option = False):
     # initial condition setup
     for i in gbv.item_list:
         u[i, 0] = 0.0  # initial unmet demand set to 0
-    for i in gbv.item_list:
-        for l in gbv.transit_list:
-            for t in range(min(gbv.period_list) - gbv.transit_time[(i,) + l], min(gbv.period_list)):
-                s[(i,) + l + (t,)] = 0.0    # initial transportation set to 0
+    for l in gbv.transit_list:
+        for t in range(min(gbv.period_list) - gbv.transit_time[l], min(gbv.period_list)):
+            s[l + (t,)] = 0.0    # initial transportation set to 0
     for i in gbv.item_list:
         for j in gbv.plant_list:
             v[i, j, 0] = gbv.init_inv[i, j]     # initial inventory set to given values
@@ -53,11 +52,11 @@ def extensive_prob(solve_option = True, relax_option = False):
                      == gbv.real_demand[i, t] for i in gbv.item_list for t in gbv.period_list), name='unmet_demand')
     prob.addConstrs((v[i, j, t] - v[i, j, t - 1] - yUI[i, j, t] + yUO[i, j, t] == 0 \
                      for i in gbv.item_list for j in gbv.plant_list for t in gbv.period_list), name='inventory')
-    prob.addConstrs((yUI[i, j, t] == gp.quicksum(s[(i,) + l + (t - gbv.transit_time[(i,) + l],)] for l in gbv.transit_list if l[1] == j) +
+    prob.addConstrs((yUI[i, j, t] == gp.quicksum(s[l + (t - gbv.transit_time[l],)] for l in gbv.transit_list if (l[0] == i) and (l[2] == j)) +
                      xC[i, j, t - gbv.lead_time[i, j]] + gbv.external_purchase[i, j, t] \
                      for i in gbv.item_list for j in gbv.plant_list for t in gbv.period_list),
                     name='input_item')
-    prob.addConstrs((yUO[i, j, t] == gp.quicksum(s[(i,) + l + (t,)] for l in gbv.transit_list if l[0] == j) +
+    prob.addConstrs((yUO[i, j, t] == gp.quicksum(s[l + (t,)] for l in gbv.transit_list if (l[0] == i) and (l[1] == j)) +
                      gp.quicksum(gbv.bom_dict[j][bk] * xC[bk[0], j, t] for bk in gbv.bom_key[j] if bk[1] == i) + z[i, j, t] +
                      gp.quicksum(gbv.alt_dict[jta] * rC[jta] for jta in gbv.alt_list if
                                  (jta[0] == j) and (jta[1] == t) and (jta[2][0] == i)) -
