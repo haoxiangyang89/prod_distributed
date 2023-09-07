@@ -156,10 +156,9 @@ def input_capacity(cap_file):
 def input_transit(transit_file):
     # input dm_df_transit: plant transit information
     transit_data = readin_csv(transit_file)
-    item_transit_list = []
-    for i in range(len(transit_data.item_code)):
-        if not((transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]) in item_transit_list):
-            item_transit_list.append((transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]))
+    transit_data.drop_duplicates(inplace = True, ignore_index = True)
+    transit_data.fillna(0)
+    item_transit_list = item_transit_list = [(transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]) for i in range(len(transit_data.item_code))]
     transit_time = {(transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]): transit_data.lead_time[i] for i in range(len(transit_data.item_code))}
     transit_cost = {(transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]): transit_data.transit_cost[i] for i in range(len(transit_data.item_code))}
     return item_transit_list, transit_time, transit_cost

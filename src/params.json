@@ -8,5 +8,6 @@
   "rel_tol": 0.01,
   "iter_tol": 300,
   "fixing": true,
-  "fixing_rounds": 10
+  "fixing_rounds": 10,
+  "LP_warm_start_rounds": 100
 }
