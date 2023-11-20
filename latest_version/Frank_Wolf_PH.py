@@ -386,6 +386,7 @@ def x_solve_FW(dummy_item_index, rho, global_vars, Conv_Hull, quad_penalty=True,
     rCi = prob.addVars(alt_i, lb=0.0, name="r")  # r_{ajt} for a=(i,i')
 
     if len(Conv_Hull_X[item_ind]) > 0:
+        # convex hull of generated extreme points so far
         extreme_points_num = len(Conv_Hull_X[item_ind])
 
         CH_coef_X = prob.addVars(extreme_points_num, lb=0.0, ub=1.0, name="convex_hull_coefficient_x")
@@ -1899,7 +1900,9 @@ if __name__ == '__main__':
     CH_V = {item: [] for item in gbv.item_list}
     CH_ZM = {item: [] for item in gbv.item_list}
     CH_YUOM = {item: [] for item in gbv.item_list}
-
+    
+    # denote V_i the extreme points of the feasible region (denoted by F_i) of sub-i, initialized as empty set
+    # for sub-i, solve Lagrangian dual problem independently (LB problem) to generate an extreme point of F_i and add it to V_i
     lb_results = pool.map(partial(x_solve_lb, global_vars=global_vars), range(len(gbv.item_list)))
     sub_lb_obj = [lb_results[i][0] for i in range(len(gbv.item_list))]
     if not ((-np.inf) in sub_lb_obj):
