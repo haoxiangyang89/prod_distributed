@@ -937,9 +937,7 @@ def x_solve_int_BD_cut(dummy_item_index, rho, global_vars, BD_cut, UB, LB, quad_
 
 def BD_x_sub(dummy_item_index, hat_global, hat_eta, relax_option=True, penalty_mag=1e5, var_threshold=1e-5):
     '''
-    A reformulation of the sub problem to guarantee feasibility for the sub problems
-    item_ind: the index of sub-problem
-    return: the subproblem built with Gurobi
+    generate benders cuts
     '''
     global gbv, global_ind, global_var_const
     item_ind = gbv.item_list[dummy_item_index]
