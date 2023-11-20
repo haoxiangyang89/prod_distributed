@@ -1903,6 +1903,7 @@ if __name__ == '__main__':
     
     # denote V_i the extreme points of the feasible region (denoted by F_i) of sub-i, initialized as empty set
     # for sub-i, solve Lagrangian dual problem independently (LB problem) to generate an extreme point of F_i and add it to V_i
+    # LB problems are MILP
     lb_results = pool.map(partial(x_solve_lb, global_vars=global_vars), range(len(gbv.item_list)))
     sub_lb_obj = [lb_results[i][0] for i in range(len(gbv.item_list))]
     if not ((-np.inf) in sub_lb_obj):
