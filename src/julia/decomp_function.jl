@@ -348,6 +348,7 @@ function _master_add_benders_cuts!(
     results::AbstractVector,
 )
     feas_gen = false
+    opt_gen = false
     sub_obj_vals_list = Dict{Int, Float64}()
     n = length(results)
     for k in 1:n
@@ -361,11 +362,12 @@ function _master_add_benders_cuts!(
         end
         sub_obj_vals_list[k] = r.sub_obj_vals
         if r.opt_coeff !== nothing
+            opt_gen = true
             opt_cut_coeff = r.opt_coeff
             sub_obj_vals = r.sub_obj_vals
             @constraint(mp, mp[:theta][k] >= sum(opt_cut_coeff[(i, j, t)] * (mp[:x][(i, j), t] - x_vals[(i, j), t]) for (i, j) in pk_used for t in ctx.data.period_df.I) + sub_obj_vals)
             println("Optimality cut added for unit $(ctx.decomp_units[k]), optimality violation: $(sub_obj_vals - theta_vals[k])")
         end
     end
-    return feas_gen, sub_obj_vals_list
+    return feas_gen, opt_gen, sub_obj_vals_list
 end

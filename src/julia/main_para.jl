@@ -108,8 +108,14 @@ epsilon = 1e-4;
 
 if lp_warm_flag
     UB_List_LP = Float64[];
+    keep_iter_ws = true;
+    iter_num_ws = 0;
     # solve the master problem for LP relaxation
-    for iter_num in 1:lp_warm_iter
+    while keep_iter_ws
+        iter_num_ws += 1;
+        if iter_num_ws > lp_warm_iter
+            keep_iter_ws = false;
+        end
         start_time = time();
         # solve the master problem and obtain the solution
         optimize!(mp);
@@ -133,11 +139,14 @@ if lp_warm_flag
                 feas_opt_cut_flag = feas_opt_cut_flag,
             );
         end
-        feas_gen, sub_obj_vals_list = _master_add_benders_cuts!(mp, ctx, prod_key_used_list, x_vals, theta_vals, results);
+        feas_gen, opt_gen, sub_obj_vals_list = _master_add_benders_cuts!(mp, ctx, prod_key_used_list, x_vals, theta_vals, results);
 
         if !feas_gen
             UB = sum(sub_obj_vals_list[k] for k in 1:n_unit);
             push!(UB_List_LP, UB);
+        end
+        if (!feas_gen) && (!opt_gen)
+            keep_iter_ws = false;
         end
         push!(time_List, time() - start_time);
     end
@@ -176,7 +185,7 @@ while keep_iter
             feas_opt_cut_flag = feas_opt_cut_flag,
         );
     end
-    feas_gen, sub_obj_vals_list = _master_add_benders_cuts!(mp, ctx, prod_key_used_list, x_vals, theta_vals, results);
+    feas_gen, opt_gen, sub_obj_vals_list = _master_add_benders_cuts!(mp, ctx, prod_key_used_list, x_vals, theta_vals, results);
 
     if !feas_gen
         UB = sum(sub_obj_vals_list[k] for k in 1:n_unit);
