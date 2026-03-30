@@ -11,6 +11,7 @@ input the data of production planning problem
 
 import pandas as pd
 import numpy as np
+import copy
 
 # We need data structure for items, plants, calendar
 
@@ -143,23 +144,25 @@ def input_capacity(cap_file):
     cap_data = readin_csv(cap_file)
     period_list = list(cap_data.period.unique())
     cap_key = []
+    cap_list = []
     max_cap = {}
     for i in range(len(cap_data.set)):
         line_key = (cap_data.set[i], cap_data.plant[i])
         cap_key.append(line_key)
+        cap_list.append(cap_data.set[i])
         if not(line_key in max_cap.keys()):
             max_cap[line_key] = {cap_data.period[i]: cap_data.max_capacity[i]}
         else:
             max_cap[line_key][cap_data.period[i]] = cap_data.max_capacity[i]
-    return period_list, cap_key, max_cap
+    cap_list = [*set(cap_list)]
+    return period_list, cap_key, max_cap, cap_list
     
 def input_transit(transit_file):
     # input dm_df_transit: plant transit information
     transit_data = readin_csv(transit_file)
-    item_transit_list = []
-    for i in range(len(transit_data.item_code)):
-        if not((transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]) in item_transit_list):
-            item_transit_list.append((transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]))
+    transit_data.drop_duplicates(inplace = True, ignore_index = True)
+    transit_data.fillna(0)
+    item_transit_list = item_transit_list = [(transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]) for i in range(len(transit_data.item_code))]
     transit_time = {(transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]): transit_data.lead_time[i] for i in range(len(transit_data.item_code))}
     transit_cost = {(transit_data.item_code[i], transit_data.src_plant[i], transit_data.dest_plant[i]): transit_data.transit_cost[i] for i in range(len(transit_data.item_code))}
     return item_transit_list, transit_time, transit_cost
@@ -263,4 +266,90 @@ def cap_adjustment(gbv):
 
     gbv.unit_cap = unit_cap
     gbv.item_plant_set_list = item_plant_set_list
+    return gbv
+
+def obtain_bounds(gbv):
+    # obtain the upper bound for an item at all locations without production
+    X_list = {}
+    for i in gbv.item_list:
+        X_list[i] = sum([gbv.init_inv[i,j] for j in gbv.plant_list if (i,j) in gbv.init_inv.keys()])
+    X_po_list = {}
+    for i in gbv.item_list:
+        X_po_list[i] = np.ones(len(gbv.period_list)) * X_list[i]
+        for t in range(len(gbv.period_list)):
+            X_po_list[i][t:] += sum([gbv.external_purchase[i,j,t] for j in gbv.plant_list if (i,j,t) in gbv.external_purchase.keys()])
+
+    # obtain the upper bound for an item at any specific location without production
+    X_j_po_list = {}
+    for i in gbv.item_list:
+        for j in gbv.plant_list:
+            X_j_po_list[i,j] = np.ones(len(gbv.period_list)) * gbv.init_inv.get((i,j),0)
+            for t in range(len(gbv.period_list)):
+                X_j_po_list[i,j][t:] += gbv.external_purchase.get((i,j,t),0)
+
+    # some issues here
+    X_bar_j = {}
+    for i in gbv.item_list:
+        for j in gbv.plant_list:
+            X_bar_j[i,j] = copy.deepcopy(X_j_po_list[i,j])
+            for j2 in gbv.plant_list:
+                if (j2 != j):
+                    for t in range(len(gbv.period_list)):
+                        transit_time = len(gbv.period_list)
+                        if (i,j2,j) in gbv.transit_time.keys():
+                            transit_time = gbv.transit_time[i,j2,j] + 1
+                        else:
+                            if ((i,j2,gbv.central) in gbv.transit_time.keys()) and ((i,gbv.central,j) in gbv.transit_time.keys()):
+                                transit_time = gbv.transit_time[i,j2,gbv.central] + 2 + gbv.transit_time[i,gbv.central,j]
+                        if (t >= transit_time):
+                            X_bar_j[i,j][t] += X_j_po_list[i,j2][t - transit_time]
+    
+    gbv.X_outside_ub = X_po_list
+    gbv.X_outside_ub_plant = X_bar_j
+
+    return gbv
+
+def analyze_bom(gbv):
+    consistuent_list = {}
+    composition_list = {}
+    for i in gbv.item_list:
+        consistuent_list[i] = []
+        for j in gbv.plant_list:
+            for i1,i2 in gbv.bom_key[j]:
+                if (i1 == i)and(not(i2 in consistuent_list[i])):
+                    consistuent_list[i].append(i2)
+
+    degree_list = np.zeros(len(gbv.item_list))
+    keep_iter = True
+    dg_no = 0.0
+    while keep_iter:
+        now_degree = copy.deepcopy(degree_list)
+        for j in gbv.plant_list:
+            for i1,i2 in gbv.bom_key[j]:
+                if degree_list[gbv.item_list.index(i2)] == dg_no:
+                    now_degree[gbv.item_list.index(i1)] = max(now_degree[gbv.item_list.index(i1)], degree_list[gbv.item_list.index(i2)] + 1)
+                    composition_list[i1,i2] = gbv.bom_dict[j][i1,i2]
+                    current_dict_keys = list(composition_list.keys())
+                    for item in current_dict_keys:
+                        if item[0] == i2:
+                            composition_list[i1,item[1]] = gbv.bom_dict[j][i1,i2] * composition_list[item]
+
+        if np.array_equiv(now_degree, degree_list):
+            keep_iter = False
+        else:
+            degree_list = now_degree
+            dg_no += 1
+
+    subsidiary_list = {}
+    precursor_list = {}
+    for i in gbv.item_list:
+        subsidiary_list[i] = [item[1] for item in composition_list.keys() if item[0] == i]
+        precursor_list[i] = [item[0] for item in composition_list.keys() if item[1] == i]
+    
+    gbv.degree_list = degree_list
+    gbv.consistuent_list = consistuent_list
+    gbv.composition_list = composition_list
+    gbv.subsidiary_list = subsidiary_list
+    gbv.precursor_list = precursor_list
+
     return gbv

@@ -35,7 +35,10 @@ def extensive_prob(solve_option = True, relax_option = False):
             s[l + (t,)] = 0.0    # initial transportation set to 0
     for i in gbv.item_list:
         for j in gbv.plant_list:
-            v[i, j, 0] = gbv.init_inv[i, j]     # initial inventory set to given values
+            if (i,j) in gbv.init_inv.keys():
+                v[i, j, 0] = gbv.init_inv[i, j]     # initial inventory set to given values
+            else:
+                v[i, j, 0] = 0.0
     for i, j in gbv.prod_key:
         for t in range(min(gbv.period_list) - gbv.lead_time[i, j], min(gbv.period_list)):
             xC[i, j, t] = 0.0   # initial production set to 0
@@ -53,11 +56,11 @@ def extensive_prob(solve_option = True, relax_option = False):
     prob.addConstrs((v[i, j, t] - v[i, j, t - 1] - yUI[i, j, t] + yUO[i, j, t] == 0 \
                      for i in gbv.item_list for j in gbv.plant_list for t in gbv.period_list), name='inventory')
     prob.addConstrs((yUI[i, j, t] == gp.quicksum(s[l + (t - gbv.transit_time[l],)] for l in gbv.transit_list if (l[0] == i) and (l[2] == j)) +
-                     xC[i, j, t - gbv.lead_time[i, j]] + gbv.external_purchase[i, j, t] \
+                     (xC[i, j, t - gbv.lead_time[i, j]] if (i,j) in gbv.prod_key else 0.0) + gbv.external_purchase[i, j, t] \
                      for i in gbv.item_list for j in gbv.plant_list for t in gbv.period_list),
                     name='input_item')
     prob.addConstrs((yUO[i, j, t] == gp.quicksum(s[l + (t,)] for l in gbv.transit_list if (l[0] == i) and (l[1] == j)) +
-                     gp.quicksum(gbv.bom_dict[j][bk] * xC[bk[0], j, t] for bk in gbv.bom_key[j] if bk[1] == i) + z[i, j, t] +
+                     gp.quicksum(gbv.bom_dict[j][bk] * xC.get((bk[0], j, t),0.0) for bk in gbv.bom_key[j] if bk[1] == i) + z[i, j, t] +
                      gp.quicksum(gbv.alt_dict[jta] * rC[jta] for jta in gbv.alt_list if
                                  (jta[0] == j) and (jta[1] == t) and (jta[2][0] == i)) -
                      gp.quicksum(gbv.alt_dict[jta] * rC[jta] for jta in gbv.alt_list if
@@ -90,7 +93,8 @@ def extensive_prob(solve_option = True, relax_option = False):
     # set up the subproblem specific objective
     prob.setObjective(
         gp.quicksum(gbv.holding_cost[i] * v[i, j, t] for i in gbv.item_list for j in gbv.plant_list for t in gbv.period_list) +
-        gp.quicksum(gbv.penalty_cost[i] * u[i, t] for i in gbv.item_list for t in gbv.period_list), GRB.MINIMIZE)
+        gp.quicksum(gbv.penalty_cost[i] * u[i, t] for i in gbv.item_list for t in gbv.period_list) +
+        gp.quicksum(gbv.holding_cost[l[0]] * 1.05 * s[l + (t,)] * gbv.transit_time[l] for l in gbv.transit_list for t in gbv.period_list), GRB.MINIMIZE)
 
     prob.update()
 
