@@ -9,6 +9,6 @@
   "iter_tol": 300,
   "fixing": true,
   "fixing_rounds": 10,
-  "fixing_lag": 6,
-  "LP_warm_start_rounds": 0
+  "LP_warm_start_rounds": 100,
+  "fixing_lag": 6
 }
