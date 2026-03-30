@@ -202,7 +202,8 @@ def x_item(item_ind, relax_option = True):
 
     # set up model parameters (M: plant, T: time, L: transit,
     ui = prob.addVars(gbv.period_list, lb = 0.0, name="u")  # u_{it} for t, unmet demand
-    si = prob.addVars(gbv.transit_list, gbv.period_list, lb = 0.0, name="s")  # s_{ilt} for l,t
+    transit_list_i = [(i_trans[1], i_trans[2]) for i_trans in gbv.transit_list if i_trans[0] == item_ind]
+    si = prob.addVars(transit_list_i, gbv.period_list, lb = 0.0, name="s")  # s_{ilt} for l,t
     zi = prob.addVars(gbv.plant_list, gbv.period_list, name="z")  # z_{ijt} for j,t
     vi = prob.addVars(gbv.plant_list, gbv.period_list, lb = 0.0,
                       ub = sum([gbv.max_prod[item_ind,j] for j in gbv.plant_list]) * len(gbv.period_list) * 10, name="v")  # v_{ijt} for j,t
@@ -216,7 +217,7 @@ def x_item(item_ind, relax_option = True):
 
     # initial condition setup
     ui[0] = 0.0  # initial unmet demand set to 0
-    for l in gbv.transit_list:
+    for l in transit_list_i:
         for t in range(min(gbv.period_list) - gbv.transit_time[(item_ind,) + l], min(gbv.period_list)):
             si[l + (t,)] = 0.0  # initial transportation set to 0
     for j in gbv.plant_list:
@@ -232,13 +233,13 @@ def x_item(item_ind, relax_option = True):
                      == gbv.real_demand[item_ind,t] for t in gbv.period_list), name='unmet_demand')
     prob.addConstrs((vi[j,t] - vi[j,t - 1] - yUIi[j,t] + yUOi[j,t] == 0 for j in gbv.plant_list \
                      for t in gbv.period_list), name='inventory')
-    prob.addConstrs((yUIi[j,t] == gp.quicksum(si[l + (t - gbv.transit_time[(item_ind,) + l],)] for l in gbv.transit_list if l[1] == j) +
+    prob.addConstrs((yUIi[j,t] == gp.quicksum(si[l + (t - gbv.transit_time[(item_ind,) + l],)] for l in transit_list_i if l[1] == j) +
                      xCi[item_ind,j,t - gbv.lead_time[item_ind,j]] + gbv.external_purchase[item_ind,j,t] \
                      for j in gbv.plant_list for t in gbv.period_list if j in gbv.item_plant[item_ind]), name='input_item_prod')
-    prob.addConstrs((yUIi[j,t] == gp.quicksum(si[l + (t - gbv.transit_time[(item_ind,) + l],)] for l in gbv.transit_list if l[1] == j) +
+    prob.addConstrs((yUIi[j,t] == gp.quicksum(si[l + (t - gbv.transit_time[(item_ind,) + l],)] for l in transit_list_i if l[1] == j) +
                      gbv.external_purchase[item_ind,j,t] for j in gbv.plant_list for t in gbv.period_list if not(j in gbv.item_plant[item_ind])),
                     name='input_item_non_prod')
-    prob.addConstrs((yUOi[j,t] == gp.quicksum(si[l + (t,)] for l in gbv.transit_list if l[0] == j) +
+    prob.addConstrs((yUOi[j,t] == gp.quicksum(si[l + (t,)] for l in transit_list_i if l[0] == j) +
                      gp.quicksum(gbv.bom_dict[j][bk] * xCi[bk[0],j,t] for bk in gbv.bom_key[j] if bk[1] == item_ind) + zi[j,t] +
                      gp.quicksum(gbv.alt_dict[jta] * rCi[jta] for jta in gbv.alt_list if
                                  (jta[0] == j) and (jta[1] == t) and (jta[2][0] == item_ind)) -
@@ -280,7 +281,8 @@ def x_item_feas(item_ind, relax_option = True, penalty_mag = 1e5):
 
     # set up model parameters (M: plant, T: time, L: transit,
     ui = prob.addVars(gbv.period_list, lb = 0.0, name="u")  # u_{it} for t, unmet demand
-    si = prob.addVars(gbv.transit_list, gbv.period_list, lb = 0.0, name="s")  # s_{ilt} for l,t
+    transit_list_i = [(i_trans[1], i_trans[2]) for i_trans in gbv.transit_list if i_trans[0] == item_ind]
+    si = prob.addVars(transit_list_i, gbv.period_list, lb = 0.0, name="s")  # s_{ilt} for l,t
     zi_p = prob.addVars(gbv.plant_list, gbv.period_list, lb = 0.0, name="z_p")  # z^+_{ijt} for j,t
     zi_m = prob.addVars(gbv.plant_list, gbv.period_list, lb = 0.0, name="z_m")  # z^-_{ijt} for j,t
     vi = prob.addVars(gbv.plant_list, gbv.period_list, lb = 0.0,
@@ -297,7 +299,7 @@ def x_item_feas(item_ind, relax_option = True, penalty_mag = 1e5):
 
     # initial condition setup
     ui[0] = 0.0  # initial unmet demand set to 0
-    for l in gbv.transit_list:
+    for l in transit_list_i:
         for t in range(min(gbv.period_list) - gbv.transit_time[(item_ind,) + l], min(gbv.period_list)):
             si[l + (t,)] = 0.0  # initial transportation set to 0
     for j in gbv.plant_list:
@@ -314,18 +316,18 @@ def x_item_feas(item_ind, relax_option = True, penalty_mag = 1e5):
     prob.addConstrs((vi[j, t] - vi[j, t - 1] - yUIi[j, t] + yUOi_p[j, t] - yUOi_m[j, t] == 0 for j in gbv.plant_list \
                      for t in gbv.period_list), name='inventory')
     prob.addConstrs((yUIi[j, t] == gp.quicksum(
-        si[l + (t - gbv.transit_time[(item_ind,) + l],)] for l in gbv.transit_list if l[1] == j) +
+        si[l + (t - gbv.transit_time[(item_ind,) + l],)] for l in transit_list_i if l[1] == j) +
                      xCi[item_ind, j, t - gbv.lead_time[item_ind, j]] + gbv.external_purchase[item_ind, j, t] \
                      for j in gbv.plant_list for t in gbv.period_list if j in gbv.item_plant[item_ind]),
                     name='input_item_prod')
     prob.addConstrs((yUIi[j, t] == gp.quicksum(
-        si[l + (t - gbv.transit_time[(item_ind,) + l],)] for l in gbv.transit_list if l[1] == j) +
+        si[l + (t - gbv.transit_time[(item_ind,) + l],)] for l in transit_list_i if l[1] == j) +
                      gbv.external_purchase[item_ind, j, t] for j in gbv.plant_list for t in gbv.period_list if
                      not (j in gbv.item_plant[item_ind])),
 
 
     name = 'input_item_non_prod')
-    prob.addConstrs((yUOi_p[j, t] - yUOi_m[j, t] == gp.quicksum(si[l + (t,)] for l in gbv.transit_list if l[0] == j) +
+    prob.addConstrs((yUOi_p[j, t] - yUOi_m[j, t] == gp.quicksum(si[l + (t,)] for l in transit_list_i if l[0] == j) +
                      gp.quicksum(gbv.bom_dict[j][bk] * xCi[bk[0], j, t] for bk in gbv.bom_key[j] if bk[1] == item_ind) + (zi_p[j, t] - zi_m[j, t]) +
                      gp.quicksum(gbv.alt_dict[jta] * rCi[jta] for jta in gbv.alt_list if
                                  (jta[0] == j) and (jta[1] == t) and (jta[2][0] == item_ind)) -
@@ -787,6 +789,63 @@ def z_solve_int_dp(local_results, rho, var_threshold = 1e-6, fixing_param = True
 
     global_vars.update(local_dict)
     return np.sqrt(dual_residual_sqr), primal_tolerance
+
+def z_solve_linear(local_results, rho, var_threshold = 1e-6):
+    '''
+    solve z problem: solve for the global variables
+    local_results: the output from the x problem
+    global_ind: a list with each item corresponding to the indices of the global variables selected for the sub
+    global_var: a list global variable handles
+    rho: second order penalty coefficient
+    '''
+    global gbv, global_var_const, global_ind
+
+    I = len(local_results)
+    # initiate the dual residual calculation
+    dual_residual_sqr = 0
+    primal_tolerance = 0
+    local_combined = []
+    global_combined = []
+
+    # create a local dictionary to update global_vars
+    local_dict = {}
+    local_dict["value"] = [np.zeros(len(item)) for item in global_var_const["keys"]]
+    local_dict["dual"] = global_vars["dual"]
+
+    # update the global variables
+    for gvar_ind in range(len(global_var_const["name"])):
+        global_array = np.zeros(len(local_dict["value"][gvar_ind]))
+        global_counter = np.zeros(len(local_dict["value"][gvar_ind]))
+        for i in range(I):
+            if len(global_ind[i][gvar_ind]) > 0:
+                # calculate the local information to update the global variables
+                local_array = np.zeros(len(local_dict["value"][gvar_ind]))
+                local_array[global_ind[i][gvar_ind]] = local_results[i][gvar_ind]
+
+                # the dual value for the non-participating global variables is zero
+                global_array += (rho * local_array - global_vars["dual"][gvar_ind][i])
+
+                # count whether the global variable occurs in the i-th subproblem
+                global_counter[global_ind[i][gvar_ind]] += 1
+
+                # record the combined global/local vars to calculate the epsilon
+                local_combined.extend(local_results[i][gvar_ind])
+
+        global_var_pre_proc = np.maximum(global_array / (rho * global_counter), 0.0)
+        # eliminate values that are very close to zero
+        global_var_post_proc = np.where(global_var_pre_proc < var_threshold, 0.0, global_var_pre_proc)
+        # calculate the dual residual
+        for i in range(I):
+            residual_list = rho * (global_var_post_proc[global_ind[i][gvar_ind]] - global_vars["value"][gvar_ind][global_ind[i][gvar_ind]])
+            dual_residual_sqr += sum(residual_list**2)
+            global_combined.extend(global_var_post_proc[global_ind[i][gvar_ind]])
+
+        local_dict["value"][gvar_ind] = global_var_post_proc
+
+    primal_tolerance = np.maximum(LA.norm(local_combined), LA.norm(global_combined))
+    global_vars.update(local_dict)
+    return np.sqrt(dual_residual_sqr), primal_tolerance
+
 
 def pi_solve(local_results, rho, var_threshold = 1e-6, adj_coeff = 1.6):
     '''
